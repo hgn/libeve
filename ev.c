@@ -307,7 +307,7 @@ int ev_loop_epoll(struct ev *ev)
 
 	assert(ev);
 
-	while (23) {
+	while (23 && ev->size > 0) {
 		nfds = epoll_wait(ev->fd, events, EVE_EPOLL_ARRAY_SIZE, -1);
 		if (nfds < 0) {
 			return EV_FAILURE;
