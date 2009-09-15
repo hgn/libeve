@@ -241,8 +241,9 @@ int ev_add_epoll(struct ev *ev, struct ev_entry *ev_entry)
 	memset(&epoll_ev, 0, sizeof(struct epoll_event));
 
 	if ((ev_entry->type == EV_TIMEOUT) &&
-		(ev_arm_timerfd_internal(ev_entry) == EV_FAILURE))
+		(ev_arm_timerfd_internal(ev_entry) == EV_FAILURE)) {
 		return EV_FAILURE;
+	}
 
 	/* FIXME: the mapping must be a one to one mapping */
 	epoll_ev.events   = ev_entry_epoll->flags;
@@ -292,6 +293,10 @@ static void ev_process_call_internal(struct ev *ev, struct ev_entry *ev_entry)
 			break;
 		case EV_TIMEOUT:
 			ev_entry->timer_cb(ev_entry->data);
+			/* close timer fd */
+			ev_del_epoll(ev, ev_entry);
+			close(ev_entry->fd);
+			ev_entry_free_epoll(ev_entry);
 			break;
 		default:
 			return;
