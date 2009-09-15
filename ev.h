@@ -30,6 +30,7 @@ struct ev_entry {
 
 struct ev *ev_new(void);
 void ev_free(struct ev *);
+static inline unsigned int ev_size(struct ev *e) { return e->size; }
 
 /* no need to free an ev_entry - it is automatically
  * when scheduled */
