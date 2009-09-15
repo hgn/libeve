@@ -8,24 +8,46 @@
 
 #include "ev.h"
 
-void read_cb(int fd, int what, void *data)
-{
-	(void) fd;
-	(void) what;
-	(void) data;
+int i = 1;
 
-	fprintf(stderr, "STDIN_FILENO ready for read(2)\n");
+void timer_cd(void *data)
+{
+	int ret;
+	struct ev *ev = data;
+	struct ev_entry *ev_e;
+	struct timespec timespec = { 0, 1000 };
+
+	if (i++ > 1000000)
+		return;
+
+	if (i++ % 10000 == 0)
+		fprintf(stdout, "iteration: %d\n", i);
+
+	ev_e = ev_timer_new(&timespec, timer_cd, ev);
+	if (!ev_e) {
+		fprintf(stderr, "failed to create a ev_entry object\n");
+		exit(666);
+	}
+
+	ret = ev_add(ev, ev_e);
+	if (ret != EV_SUCCESS) {
+		fprintf(stderr, "Cannot add entry to event handler (%d)\n", i);
+	}
+
+	return;
 }
+
 
 int main(void)
 {
 	int ret;
 	struct ev *ev;
 	struct ev_entry *ev_e;
+	struct timespec timespec = { 1, 0};
 
 	ev = ev_new();
 
-	ev_e = ev_entry_new(STDIN_FILENO, EV_READ, read_cb, NULL);
+	ev_e = ev_timer_new(&timespec, timer_cd, ev);
 	if (!ev_e) {
 		fprintf(stderr, "failed to create a ev_entry object\n");
 		exit(666);
@@ -37,7 +59,9 @@ int main(void)
 		return EXIT_FAILURE;
 	}
 
-	ev_entry_free(ev_e);
+	ev_loop(ev);
+
+	fprintf(stderr, "returned from event loop\n");
 
 	ev_free(ev);
 
