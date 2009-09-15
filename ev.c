@@ -190,6 +190,8 @@ static int ev_arm_timerfd_internal(struct ev_entry *ev_entry)
 	struct itimerspec new_value;
 	struct ev_entry_epoll *ev_entry_epoll = ev_entry->priv_data;
 
+	memset(&new_value, 0, sizeof(struct itimerspec));
+
 	ret = clock_gettime(CLOCK_REALTIME, &now);
 	if (ret < 0) {
 		return EV_FAILURE;
@@ -197,6 +199,13 @@ static int ev_arm_timerfd_internal(struct ev_entry *ev_entry)
 
 	new_value.it_value.tv_sec  = now.tv_sec  + ev_entry->timespec.tv_sec;
 	new_value.it_value.tv_nsec = now.tv_nsec + ev_entry->timespec.tv_nsec;
+
+	/* timerfd_settime() cannot handle larger nsecs - catch overflow */
+	if (new_value.it_value.tv_nsec >= 1000000000) {
+		new_value.it_value.tv_sec++;
+		new_value.it_value.tv_nsec -= 1000000000;
+		assert(new_value.it_value.tv_nsec > 0);
+	}
 
 	new_value.it_interval.tv_sec  = 0;
 	new_value.it_interval.tv_nsec = 0;
