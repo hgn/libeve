@@ -2,6 +2,7 @@
 #define EV_H
 
 #include <sys/time.h>
+#include <inttypes.h>
 
 #define	EV_READ    (1 << 0)
 #define	EV_WRITE   (1 << 1)
@@ -40,12 +41,10 @@ void ev_entry_free(struct ev_entry *);
 
 int ev_add(struct ev*, struct ev_entry *);
 int ev_del(struct ev*, struct ev_entry *);
-int ev_loop(struct ev*);
+int ev_loop(struct ev*, uint32_t);
 int ev_run_out(struct ev*);
 
 #if defined(HAVE_EPOLL)
-#include <inttypes.h>
-#include "ev.h"
 
 #define	EVE_EPOLL_BACKING_STORE_HINT 64
 #define EVE_EPOLL_ARRAY_SIZE 64
@@ -64,7 +63,7 @@ void ev_entry_free_epoll(struct ev_entry *);
 int ev_add_epoll(struct ev*, struct ev_entry *);
 int ev_del_epoll(struct ev *, struct ev_entry *);
 
-int ev_loop_epoll(struct ev *);
+int ev_loop_epoll(struct ev *, uint32_t);
 int ev_run_out_epoll(struct ev *);
 
 #endif

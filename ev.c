@@ -36,9 +36,9 @@ int ev_del(struct ev *ev, struct ev_entry *ev_entry)
 	return ev_del_epoll(ev, ev_entry);
 }
 
-int ev_loop(struct ev *ev)
+int ev_loop(struct ev *ev, uint32_t flags)
 {
-	return ev_loop_epoll(ev);
+	return ev_loop_epoll(ev, flags);
 }
 
 int ev_run_out(struct ev *ev) {
@@ -305,12 +305,14 @@ static void ev_process_call_internal(struct ev *ev, struct ev_entry *ev_entry)
 	return;
 }
 
-int ev_loop_epoll(struct ev *ev)
+int ev_loop_epoll(struct ev *ev, uint32_t flags)
 {
 	int nfds, i;
 	struct epoll_event events[EVE_EPOLL_ARRAY_SIZE];
 
 	assert(ev);
+
+	(void) flags; /* currently ignored */
 
 	while (23 && ev->size > 0) {
 		nfds = epoll_wait(ev->fd, events, EVE_EPOLL_ARRAY_SIZE, -1);
