@@ -1,55 +1,32 @@
 #include "ev.h"
 
-#if defined(HAVE_EPOLL)
-
-struct ev *ev_new(void)
-{
-	return ev_new_epoll();
-}
-
-void ev_free(struct ev *ev)
-{
-	return ev_free_epoll(ev);
-}
-
-struct ev_entry *ev_entry_new(int fd, int what, void (*cb)(int, int, void *), void *data)
-{
-	return ev_entry_new_epoll(fd, what, cb, data);
-}
-
-struct ev_entry *ev_timer_new(struct timespec *timespec, void (*cb)(void *), void *data)
-{
-	return ev_timer_new_epoll(timespec, cb, data);
-}
-
-void ev_entry_free(struct ev_entry *ev_entry)
-{
-	ev_entry_free_epoll(ev_entry);
-}
-
-int ev_add(struct ev *ev, struct ev_entry *ev_entry) {
-	return ev_add_epoll(ev, ev_entry);
-}
-
-int ev_del(struct ev *ev, struct ev_entry *ev_entry)
-{
-	return ev_del_epoll(ev, ev_entry);
-}
-
-int ev_loop(struct ev *ev, uint32_t flags)
-{
-	return ev_loop_epoll(ev, flags);
-}
-
-int ev_run_out(struct ev *ev) {
-	return ev_run_out_epoll(ev);
-}
-
-#else
-# error "No event mechanism defined (epoll, select, ..) - configure your Makefile"
+#ifndef rdtscll
+#define rdtscll(val) \
+	__asm__ __volatile__("rdtsc" : "=A" (val))
 #endif
 
+/* gcc is smart enough to always inline static
+ * defined functions that are called ones.
+ * Nevertheless, we enforce this too --HGN */
+#undef __always_inline
+#if __GNUC_PREREQ (3,2)
+# define __always_inline __inline __attribute__ ((__always_inline__))
+#else
+# define __always_inline __inline
+#endif
+
+#if !defined likely && !defined unlikely
+# define likely(x)   __builtin_expect(!!(x), 1)
+# define unlikely(x) __builtin_expect(!!(x), 0)
+#endif
+
+#if !defined ARRAY_SIZE
+# define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
+#endif
+
+
 #if defined(HAVE_EPOLL)
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -59,7 +36,12 @@ int ev_run_out(struct ev *ev) {
 #include <sys/timerfd.h>
 #include <assert.h>
 
-#include "ev.h"
+struct ev_entry_epoll {
+	uint32_t flags;
+};
+
+#define	EVE_EPOLL_BACKING_STORE_HINT 64
+#define EVE_EPOLL_ARRAY_SIZE 64
 
 static struct ev *struct_ev_new_internal(void)
 {
@@ -74,7 +56,7 @@ static struct ev *struct_ev_new_internal(void)
 	return ev;
 }
 
-void ev_free_epoll(struct ev *ev)
+static inline void ev_free_epoll(struct ev *ev)
 {
 	assert(ev);
 
@@ -85,7 +67,7 @@ void ev_free_epoll(struct ev *ev)
 	free(ev);
 }
 
-struct ev *ev_new_epoll(void)
+static inline struct ev *ev_new_epoll(void)
 {
 	struct ev *ev;
 
@@ -124,7 +106,7 @@ static struct ev_entry *struct_ev_entry_new_internal(void)
 	return ev_entry;
 }
 
-struct ev_entry *ev_entry_new_epoll(int fd, int what,
+static inline struct ev_entry *ev_entry_new_epoll(int fd, int what,
 		void (*cb)(int, int, void *), void *data)
 {
 	struct ev_entry *ev_entry;
@@ -156,7 +138,7 @@ struct ev_entry *ev_entry_new_epoll(int fd, int what,
 	return ev_entry;
 }
 
-struct ev_entry *ev_timer_new_epoll(struct timespec *timespec,
+static inline struct ev_entry *ev_timer_new_epoll(struct timespec *timespec,
 		void (*cb)(void *), void *data)
 {
 	struct ev_entry *ev_entry;
@@ -174,7 +156,7 @@ struct ev_entry *ev_timer_new_epoll(struct timespec *timespec,
 	return ev_entry;
 }
 
-void ev_entry_free_epoll(struct ev_entry *ev_entry)
+static inline void ev_entry_free_epoll(struct ev_entry *ev_entry)
 {
 	assert(ev_entry->priv_data);
 
@@ -228,7 +210,7 @@ static int ev_arm_timerfd_internal(struct ev_entry *ev_entry)
 	return EV_SUCCESS;
 }
 
-int ev_add_epoll(struct ev *ev, struct ev_entry *ev_entry)
+static inline int ev_add_epoll(struct ev *ev, struct ev_entry *ev_entry)
 {
 	int ret;
 	struct epoll_event epoll_ev;
@@ -259,7 +241,7 @@ int ev_add_epoll(struct ev *ev, struct ev_entry *ev_entry)
 	return EV_SUCCESS;
 }
 
-int ev_del_epoll(struct ev *ev, struct ev_entry *ev_entry)
+static inline int ev_del_epoll(struct ev *ev, struct ev_entry *ev_entry)
 {
 	int ret;
 	struct epoll_event epoll_ev;
@@ -278,8 +260,31 @@ int ev_del_epoll(struct ev *ev, struct ev_entry *ev_entry)
 	return EV_SUCCESS;
 }
 
+static inline void ev_process_call_epoll_timeout(
+		struct ev *ev, struct ev_entry *ev_entry)
+{
+	ssize_t ret;
+	int64_t time_buf;
 
-static void ev_process_call_internal(struct ev *ev, struct ev_entry *ev_entry)
+	/* first of all - call user callback */
+	ev_entry->timer_cb(ev_entry->data);
+
+	/* and now: cleanup timer specific data and
+	 * finally all event specific data */
+	ret = read(ev_entry->fd, &time_buf, sizeof(int64_t));
+	if ((ret < (ssize_t)sizeof(int64_t)) ||
+		(time_buf > 1)) {
+		/* failure - should not happens: kernel bug */
+		assert(0);
+	}
+
+	ev_del_epoll(ev, ev_entry);
+	close(ev_entry->fd);
+	ev_entry_free_epoll(ev_entry);
+}
+
+
+static inline void ev_process_call_internal(struct ev *ev, struct ev_entry *ev_entry)
 {
 	(void) ev;
 
@@ -292,11 +297,7 @@ static void ev_process_call_internal(struct ev *ev, struct ev_entry *ev_entry)
 			return;
 			break;
 		case EV_TIMEOUT:
-			ev_entry->timer_cb(ev_entry->data);
-			/* close timer fd */
-			ev_del_epoll(ev, ev_entry);
-			close(ev_entry->fd);
-			ev_entry_free_epoll(ev_entry);
+			ev_process_call_epoll_timeout(ev, ev_entry);
 			break;
 		default:
 			return;
@@ -305,7 +306,7 @@ static void ev_process_call_internal(struct ev *ev, struct ev_entry *ev_entry)
 	return;
 }
 
-int ev_loop_epoll(struct ev *ev, uint32_t flags)
+static inline int ev_loop_epoll(struct ev *ev, uint32_t flags)
 {
 	int nfds, i;
 	struct epoll_event events[EVE_EPOLL_ARRAY_SIZE];
@@ -333,7 +334,7 @@ int ev_loop_epoll(struct ev *ev, uint32_t flags)
 	return EV_SUCCESS;
 }
 
-int ev_run_out_epoll(struct ev *ev)
+static inline int ev_run_out_epoll(struct ev *ev)
 {
 	assert(ev);
 
@@ -342,6 +343,57 @@ int ev_run_out_epoll(struct ev *ev)
 	return EV_SUCCESS;
 }
 
+
+/* actual API methods definitions is here */
+struct ev *ev_new(void)
+{
+	return ev_new_epoll();
+}
+
+void ev_free(struct ev *ev)
+{
+	return ev_free_epoll(ev);
+}
+
+struct ev_entry *ev_entry_new(int fd, int what,
+		void (*cb)(int, int, void *), void *data)
+{
+	return ev_entry_new_epoll(fd, what, cb, data);
+}
+
+struct ev_entry *ev_timer_new(struct timespec *timespec,
+		void (*cb)(void *), void *data)
+{
+	return ev_timer_new_epoll(timespec, cb, data);
+}
+
+void ev_entry_free(struct ev_entry *ev_entry)
+{
+	ev_entry_free_epoll(ev_entry);
+}
+
+int ev_add(struct ev *ev, struct ev_entry *ev_entry) {
+	return ev_add_epoll(ev, ev_entry);
+}
+
+int ev_del(struct ev *ev, struct ev_entry *ev_entry)
+{
+	return ev_del_epoll(ev, ev_entry);
+}
+
+int ev_loop(struct ev *ev, uint32_t flags)
+{
+	return ev_loop_epoll(ev, flags);
+}
+
+int ev_run_out(struct ev *ev) {
+	return ev_run_out_epoll(ev);
+}
+
+#else
+# error "No event mechanism defined (epoll, select, ..) - "
+        "adjust your Makefile and define -DHAVE_EPOLL or something"
 #endif
+
 
 /* vim: set tw=78 ts=4 sw=4 sts=4 ff=unix noet: */
