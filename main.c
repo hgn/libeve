@@ -1,27 +1,24 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <string.h>
-#include <unistd.h>
-#include <sys/stat.h>
 
 #include "ev.h"
 
-int i = 1;
+#define	SLEEP_SECONDS 1
+#define	ITERATIO_MAX 10
+
+int i = 0;
 
 void timer_cd(void *data)
 {
 	int ret;
 	struct ev *ev = data;
 	struct ev_entry *ev_e;
-	struct timespec timespec = { 0, 1000 };
+	struct timespec timespec = { SLEEP_SECONDS, 0};
 
-	if (i++ > 1000000)
+	fprintf(stderr, "timer_cd() called %d time\n", i);
+
+	if (i++ >= ITERATIO_MAX)
 		return;
-
-	if (i++ % 10000 == 0)
-		fprintf(stdout, "iteration: %d\n", i);
 
 	ev_e = ev_timer_new(&timespec, timer_cd, ev);
 	if (!ev_e) {
@@ -40,34 +37,43 @@ void timer_cd(void *data)
 
 int main(void)
 {
-	int ret;
+	int ret, flags = 0;
 	struct ev *ev;
 	struct ev_entry *ev_e;
-	struct timespec timespec = { 1, 0};
+	struct timespec timespec = { SLEEP_SECONDS, 0};
 
 	ev = ev_new();
+	if (!ev) {
+		fprintf(stderr, "Cannot create event handler\n");
+		goto err;
+	}
 
 	ev_e = ev_timer_new(&timespec, timer_cd, ev);
 	if (!ev_e) {
-		fprintf(stderr, "failed to create a ev_entry object\n");
-		exit(666);
+		fprintf(stderr, "Failed to create a ev_entry object\n");
+		goto err_timer;
 	}
 
 	ret = ev_add(ev, ev_e);
 	if (ret != EV_SUCCESS) {
 		fprintf(stderr, "Cannot add entry to event handler\n");
-		return EXIT_FAILURE;
+		goto err_add;
 	}
 
-	ev_loop(ev);
-
-	fprintf(stderr, "returned from event loop\n");
+	ev_loop(ev, flags);
 
 	ev_free(ev);
 
 	return EXIT_SUCCESS;
-}
 
+
+err_add:
+	ev_entry_free(ev_e);
+err_timer:
+	ev_free(ev);
+err:
+	return EXIT_FAILURE;
+}
 
 
 /* vim: set tw=78 ts=4 sw=4 sts=4 ff=unix noet: */

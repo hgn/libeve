@@ -114,6 +114,7 @@ static inline struct ev_entry *ev_entry_new_epoll(int fd, int what,
 
 	assert(what == EV_READ || what == EV_WRITE);
 	assert(cb);
+	assert(fd >= 0);
 
 	ev_entry = struct_ev_entry_new_internal();
 
@@ -132,6 +133,7 @@ static inline struct ev_entry *ev_entry_new_epoll(int fd, int what,
 			ev_entry_epoll->flags = EPOLLOUT | EPOLLPRI | EPOLLERR | EPOLLHUP;
 			break;
 		default:
+			/* cannot happen - previously catched via assert(3) */
 			break;
 	}
 
