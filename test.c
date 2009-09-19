@@ -1,10 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #include "ev.h"
 
 #define	SLEEP_SECONDS 1
-#define	ITERATIO_MAX 10
+#define	ITERATIO_MAX 2
 
 int i = 0;
 
@@ -34,7 +35,6 @@ void timer_cd(void *data)
 	return;
 }
 
-
 int main(void)
 {
 	int ret, flags = 0;
@@ -48,6 +48,7 @@ int main(void)
 		goto err;
 	}
 
+	/* do timer test */
 	ev_e = ev_timer_new(&timespec, timer_cd, ev);
 	if (!ev_e) {
 		fprintf(stderr, "Failed to create a ev_entry object\n");

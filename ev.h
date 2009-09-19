@@ -44,6 +44,10 @@ int ev_del(struct ev*, struct ev_entry *);
 int ev_loop(struct ev*, uint32_t);
 int ev_run_out(struct ev*);
 
+/* auxiliary functions */
+void ev_entry_set_data(struct ev_entry *, void *);
+int ev_set_non_blocking(int fd);
+
 #endif /* EV_H */
 
 /* vim: set tw=78 ts=4 sw=4 sts=4 ff=unix noet: */

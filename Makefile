@@ -1,9 +1,7 @@
 EPOLL      :=1 
 BUILD_TYPE := testing
 
-TARGET = ev_test
-
-OBJ := ev.o main.o
+OBJ := ev.o
 
 LIBS   := -lrt  # for clock_gettime(2)
 CC     := gcc
@@ -22,14 +20,17 @@ ifdef EPOLL
 				EXTRA_CFLAGS := -DHAVE_EPOLL
 endif
 
-all: $(TARGET)
+all: test bench
 
 %.o : %.c
 	$(CC) -c $(CFLAGS) $(EXTRA_CFLAGS) $(CPPFLAGS) $< -o $@
 
-$(TARGET): $(OBJ)
-	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(LIBS) -o $(TARGET) $(OBJ)
+test: $(OBJ) test.c
+	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(LIBS) -o test $(OBJ) test.c
+
+bench: $(OBJ) bench.c
+	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(LIBS) -o bench $(OBJ) bench.c
 
 clean:
-	-rm -f $(OBJ) $(TARGET)
+	-rm -f $(OBJ) test bench
 

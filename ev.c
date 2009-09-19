@@ -1,3 +1,6 @@
+/* Hagen Paul Pfeifer <hagen@jauu.net>
+ * Public Domain Software - do what ever you want */
+
 #include "ev.h"
 
 #ifndef rdtscll
@@ -15,12 +18,12 @@
 # define __always_inline __inline
 #endif
 
-#if !defined likely && !defined unlikely
+#if !defined(likely) && !defined(unlikely)
 # define likely(x)   __builtin_expect(!!(x), 1)
 # define unlikely(x) __builtin_expect(!!(x), 0)
 #endif
 
-#if !defined ARRAY_SIZE
+#if !defined(ARRAY_SIZE)
 # define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 #endif
 
@@ -35,6 +38,7 @@
 #include <time.h>
 #include <sys/timerfd.h>
 #include <assert.h>
+#include <fcntl.h>
 
 struct ev_entry_epoll {
 	uint32_t flags;
@@ -254,7 +258,7 @@ static inline int ev_del_epoll(struct ev *ev, struct ev_entry *ev_entry)
 
 	ret = epoll_ctl(ev->fd, EPOLL_CTL_DEL, ev_entry->fd, &epoll_ev);
 	if (ret < 0) {
-		 return EV_FAILURE;
+		return EV_FAILURE;
 	}
 
 	ev->size--;
@@ -286,7 +290,8 @@ static inline void ev_process_call_epoll_timeout(
 }
 
 
-static inline void ev_process_call_internal(struct ev *ev, struct ev_entry *ev_entry)
+static inline void ev_process_call_internal(
+		struct ev *ev, struct ev_entry *ev_entry)
 {
 	(void) ev;
 
@@ -390,6 +395,28 @@ int ev_loop(struct ev *ev, uint32_t flags)
 
 int ev_run_out(struct ev *ev) {
 	return ev_run_out_epoll(ev);
+}
+
+void ev_entry_set_data(struct ev_entry *entry, void *data)
+{
+	entry->data = data;
+}
+
+/* similar for all implementations, at least
+ * under Linux. Solaris, AIX, etc. differs and need
+ * a separate implementation */
+int ev_set_non_blocking(int fd) {
+	int flags;
+
+	flags = fcntl(fd, F_GETFL, 0);
+	if (flags < 0)
+		return EV_FAILURE;
+
+	flags = fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+	if (flags < 0)
+		return EV_FAILURE;
+
+	return EV_SUCCESS;
 }
 
 #else
