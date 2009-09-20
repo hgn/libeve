@@ -266,6 +266,21 @@ static inline int ev_del_epoll(struct ev *ev, struct ev_entry *ev_entry)
 	return EV_SUCCESS;
 }
 
+static inline int ev_timer_cancel_epoll(struct ev *ev, struct ev_entry *ev_entry)
+{
+	int ret;
+
+	assert(ev_entry->type == EV_TIMEOUT);
+
+	ret = ev_del_epoll(ev, ev_entry);
+	if (ret != EV_SUCCESS)
+		return EV_FAILURE;
+
+	ev_entry_free_epoll(ev_entry);
+
+	return EV_SUCCESS;
+}
+
 static inline void ev_process_call_epoll_timeout(
 		struct ev *ev, struct ev_entry *ev_entry)
 {
@@ -377,6 +392,10 @@ struct ev_entry *ev_timer_new(struct timespec *timespec,
 void ev_entry_free(struct ev_entry *ev_entry)
 {
 	ev_entry_free_epoll(ev_entry);
+}
+
+int ev_timer_cancel(struct ev *ev, struct ev_entry *ev_entry) {
+	return ev_timer_cancel_epoll(ev, ev_entry);
 }
 
 int ev_add(struct ev *ev, struct ev_entry *ev_entry) {

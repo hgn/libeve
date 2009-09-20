@@ -39,6 +39,8 @@ struct ev_entry *ev_entry_new(int, int, void (*cb)(int, int, void *), void *);
 struct ev_entry *ev_timer_new(struct timespec *, void (*cb)(void *), void *);
 void ev_entry_free(struct ev_entry *);
 
+int ev_timer_cancel(struct ev *, struct ev_entry *);
+
 int ev_add(struct ev*, struct ev_entry *);
 int ev_del(struct ev*, struct ev_entry *);
 int ev_loop(struct ev*, uint32_t);

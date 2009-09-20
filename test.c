@@ -35,6 +35,78 @@ void timer_cd(void *data)
 	return;
 }
 
+struct ev_wrapper {
+	struct ev *ev;
+	struct ev_entry *ev_entry;
+};
+
+static void cancel_timer_cb(void *data)
+{
+	int ret;
+	struct ev_wrapper *ev_wrapper = data;
+
+	ret = ev_timer_cancel(ev_wrapper->ev, ev_wrapper->ev_entry);
+	if (ret != EV_SUCCESS) {
+		fprintf(stderr, "failed to cancel timer\n");
+		exit(EXIT_FAILURE);
+	}
+
+	return;
+}
+
+static int do_cancel_test(struct ev *ev)
+{
+	int ret, flags = 0;
+	struct ev_entry *eve1, *eve2;
+	struct timespec timespec1 = { 5, 0 };
+	struct timespec timespec2 = { 1, 0 };
+	struct ev_wrapper *ev_wrapper;
+
+	fprintf(stderr, "run timer cancel test ...");
+
+	eve1 = ev_timer_new(&timespec1, timer_cd, ev);
+	if (!eve1) {
+		fprintf(stderr, "Failed to create a ev_entry object\n");
+		exit(EXIT_FAILURE);
+	}
+
+	ret = ev_add(ev, eve1);
+	if (ret != EV_SUCCESS) {
+		fprintf(stderr, "Cannot add entry to event handler\n");
+		exit(EXIT_FAILURE);
+	}
+
+
+	ev_wrapper = malloc(sizeof(struct ev_wrapper));
+	if (!ev_wrapper) {
+		perror("malloc");
+		exit(EXIT_FAILURE);
+	}
+
+	ev_wrapper->ev       = ev;
+	ev_wrapper->ev_entry = eve1;
+
+	eve2 = ev_timer_new(&timespec2, cancel_timer_cb, ev_wrapper);
+	if (!eve2) {
+		fprintf(stderr, "Failed to create a ev_entry object\n");
+		exit(EXIT_FAILURE);
+	}
+
+	ret = ev_add(ev, eve2);
+	if (ret != EV_SUCCESS) {
+		fprintf(stderr, "Cannot add entry to event handler\n");
+		exit(EXIT_FAILURE);
+	}
+
+	ev_loop(ev, flags);
+
+	free(ev_wrapper);
+
+	fprintf(stderr, " passed\n");
+
+	return 1;
+}
+
 int main(void)
 {
 	int ret, flags = 0;
@@ -47,6 +119,8 @@ int main(void)
 		fprintf(stderr, "Cannot create event handler\n");
 		goto err;
 	}
+
+	ret = do_cancel_test(ev);
 
 	/* do timer test */
 	ev_e = ev_timer_new(&timespec, timer_cd, ev);
