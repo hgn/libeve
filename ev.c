@@ -276,6 +276,8 @@ static inline int ev_timer_cancel_epoll(struct ev *ev, struct ev_entry *ev_entry
 	if (ret != EV_SUCCESS)
 		return EV_FAILURE;
 
+	/* close the timer fd specific descriptor */
+	close(ev_entry->fd);
 	ev_entry_free_epoll(ev_entry);
 
 	return EV_SUCCESS;
