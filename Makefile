@@ -2,6 +2,7 @@ EPOLL      :=1
 BUILD_TYPE := testing
 
 OBJ := ev.o
+LIBRARY := ev.a
 
 LIBS   := -lrt  # for clock_gettime(2)
 CC     := gcc
@@ -20,10 +21,13 @@ ifdef EPOLL
 				EXTRA_CFLAGS := -DHAVE_EPOLL
 endif
 
-all: test bench
+all: test bench $(LIBRARY)
 
 %.o : %.c
 	$(CC) -c $(CFLAGS) $(EXTRA_CFLAGS) $(CPPFLAGS) $< -o $@
+
+$(LIBRARY): $(OBJ)
+	ar rcs $(LIBRARY) $(OBJ)
 
 test: $(OBJ) test.c
 	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(LIBS) -o test $(OBJ) test.c

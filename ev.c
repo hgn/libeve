@@ -270,6 +270,7 @@ static inline int ev_timer_cancel_epoll(struct ev *ev, struct ev_entry *ev_entry
 {
 	int ret;
 
+	assert(ev_entry);
 	assert(ev_entry->type == EV_TIMEOUT);
 
 	ret = ev_del_epoll(ev, ev_entry);
