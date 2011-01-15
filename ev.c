@@ -8,9 +8,6 @@
 	__asm__ __volatile__("rdtsc" : "=A" (val))
 #endif
 
-/* gcc is smart enough to always inline static
- * defined functions that are called ones.
- * Nevertheless, we enforce this too --HGN */
 #undef __always_inline
 #if __GNUC_PREREQ (3,2)
 # define __always_inline __inline __attribute__ ((__always_inline__))
@@ -52,6 +49,9 @@
 	 ((tvp)->tv_nsec cmp (uvp)->tv_nsec) :    \
 	 ((tvp)->tv_sec cmp (uvp)->tv_sec))
 
+#define	timespec_eq(tvp, uvp) \
+	(((tvp)->tv_sec == (uvp)->tv_sec) && ((tvp)->tv_nsec == (uvp)->tv_nsec))
+
 #define timespec_add(res, vvp, uvp)                       \
 do {                                                      \
 	(res)->tv_sec  = (vvp)->tv_sec  + (uvp)->tv_sec;  \
@@ -71,12 +71,6 @@ do {                                                      \
 		(res)->tv_nsec += 1000000000;             \
 	}                                                 \
 } while (0)
-
-static inline int timespec_equal(const struct timespec *a,
-                                 const struct timespec *b)
-{
-        return (a->tv_sec == b->tv_sec) && (a->tv_nsec == b->tv_nsec);
-}
 
 static struct ev *struct_ev_new_internal(void)
 {
@@ -762,10 +756,11 @@ struct rbtree *rbtree_init(int (*compare)(void *, void *))
 
 struct rbtree_node *rbtree_lookup(struct rbtree* t, void* key) {
 
+	int comp_result;
 	struct rbtree_node* n = t->root;
 
 	while (n != NULL) {
-		int comp_result = t->compare(key, n->key);
+		comp_result = t->compare(key, n->key);
 		if (comp_result == 0) {
 			return n;
 		} else if (comp_result < 0) {
@@ -779,27 +774,32 @@ struct rbtree_node *rbtree_lookup(struct rbtree* t, void* key) {
 }
 
 void rotate_left(struct rbtree* t, struct rbtree_node* n) {
+
 	struct rbtree_node* r = n->right;
+
 	replace_node(t, n, r);
 	n->right = r->left;
+
 	if (r->left != NULL) {
 		r->left->parent = n;
 	}
+
 	r->left = n;
 	n->parent = r;
 }
 
 void rotate_right(struct rbtree* t, struct rbtree_node* n) {
 
-	struct rbtree_node* L = n->left;
+	struct rbtree_node* left = n->left;
 
-	replace_node(t, n, L);
-	n->left = L->right;
-	if (L->right != NULL) {
-		L->right->parent = n;
+	replace_node(t, n, left);
+	n->left = left->right;
+	if (left->right != NULL) {
+		left->right->parent = n;
 	}
-	L->right = n;
-	n->parent = L;
+
+	left->right = n;
+	n->parent   = left;
 }
 
 void replace_node(struct rbtree* t, struct rbtree_node* oldn,
