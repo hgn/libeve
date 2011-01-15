@@ -54,17 +54,19 @@ static void cancel_timer_cb(void *data)
 	return;
 }
 
+/* idea, test that timers are called in strict order and that the
+ * first timer (fired after 1 seconds) cancel the 5 second timout timer */
 static int do_cancel_test(struct ev *ev)
 {
 	int ret, flags = 0;
 	struct ev_entry *eve1, *eve2;
-	struct timespec timespec1 = { 5, 0 };
-	struct timespec timespec2 = { 1, 0 };
+	const struct timespec timespec1 = { .tv_sec = 5, .tv_nsec = 0 };
+	const struct timespec timespec2 = { .tv_sec = 1, .tv_nsec = 0 };
 	struct ev_wrapper *ev_wrapper;
 
 	fprintf(stderr, "run timer cancel test ...");
 
-	eve1 = ev_timer_new(&timespec1, timer_cd, ev);
+	eve1 = ev_timer_new((void *)&timespec1, (void *)timer_cd, (void *)ev);
 	if (!eve1) {
 		fprintf(stderr, "Failed to create a ev_entry object\n");
 		exit(EXIT_FAILURE);
@@ -86,7 +88,7 @@ static int do_cancel_test(struct ev *ev)
 	ev_wrapper->ev       = ev;
 	ev_wrapper->ev_entry = eve1;
 
-	eve2 = ev_timer_new(&timespec2, cancel_timer_cb, ev_wrapper);
+	eve2 = ev_timer_new((void *)&timespec2, (void *)cancel_timer_cb, (void *)ev_wrapper);
 	if (!eve2) {
 		fprintf(stderr, "Failed to create a ev_entry object\n");
 		exit(EXIT_FAILURE);
@@ -109,19 +111,22 @@ static int do_cancel_test(struct ev *ev)
 
 int main(void)
 {
-	int ret, flags = 0;
+	int ret;
 	struct ev *ev;
-	struct ev_entry *ev_e;
-	struct timespec timespec = { SLEEP_SECONDS, 0};
 
 	ev = ev_new();
 	if (!ev) {
 		fprintf(stderr, "Cannot create event handler\n");
-		goto err;
+		return EXIT_FAILURE;
 	}
 
 	ret = do_cancel_test(ev);
 
+	ev_free(ev);
+
+	return EXIT_SUCCESS;
+
+#if 0
 	/* do timer test */
 	ev_e = ev_timer_new(&timespec, timer_cd, ev);
 	if (!ev_e) {
@@ -138,16 +143,9 @@ int main(void)
 	ev_loop(ev, flags);
 
 	ev_free(ev);
+#endif
 
-	return EXIT_SUCCESS;
 
-
-err_add:
-	ev_entry_free(ev_e);
-err_timer:
-	ev_free(ev);
-err:
-	return EXIT_FAILURE;
 }
 
 

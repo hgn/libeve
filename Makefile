@@ -1,6 +1,3 @@
-EPOLL      :=1 
-BUILD_TYPE := testing
-
 OBJ := ev.o
 LIBRARY := ev.a
 
@@ -15,11 +12,9 @@ CFLAGS := -Wall -Wextra -pipe -Wwrite-strings -Wsign-compare \
 				 -Wcast-align -Wbad-function-cast -Wwrite-strings \
 				 -Wold-style-definition  -Wdeclaration-after-statement
 
-CFLAGS += -ggdb3 -Werror
+#CFLAGS += -ggdb3 -Werror
 
-ifdef EPOLL
-				EXTRA_CFLAGS := -DHAVE_EPOLL
-endif
+EXTRA_CFLAGS := -DHAVE_SELECT -DLIBEVE_DEBUG
 
 all: test bench $(LIBRARY)
 
