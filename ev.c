@@ -201,15 +201,15 @@ static inline struct ev_entry *ev_entry_new_epoll(int fd, int what,
 	ev_entry_data_epoll = ev_entry->priv_data;
 
 	switch (what) {
-		case EV_READ:
-			ev_entry_data_epoll->flags = EPOLLIN | EPOLLPRI | EPOLLERR | EPOLLHUP;
-			break;
-		case EV_WRITE:
-			ev_entry_data_epoll->flags = EPOLLOUT | EPOLLPRI | EPOLLERR | EPOLLHUP;
-			break;
-		default:
-			/* cannot happen - previously catched via assert(3) */
-			break;
+	case EV_READ:
+		ev_entry_data_epoll->flags = EPOLLIN | EPOLLPRI | EPOLLERR | EPOLLHUP;
+		break;
+	case EV_WRITE:
+		ev_entry_data_epoll->flags = EPOLLOUT | EPOLLPRI | EPOLLERR | EPOLLHUP;
+		break;
+	default:
+		/* cannot happen - previously catched via assert(3) */
+		break;
 	}
 
 	return ev_entry;
@@ -327,7 +327,8 @@ static inline int ev_del_epoll(struct ev *ev, struct ev_entry *ev_entry)
 	int ret;
 	struct epoll_event epoll_ev;
 
-	assert(ev && ev_entry);
+	assert(ev);
+	assert(ev_entry);
 
 	memset(&epoll_ev, 0, sizeof(struct epoll_event));
 
@@ -532,7 +533,7 @@ struct rbtree_node *rbtree_lookup_min_node(struct rbtree_node *);
 size_t rbtree_size(struct rbtree *);
 struct rbtree_node *rbtree_node_alloc(void);
 void rbtree_node_free(struct rbtree_node *);
-/* deletes rbtree only, rbtree_node must be deleted before */
+/* deletes rbtree only, rbtree_node are NOT freed */
 void rbtree_rbtree_free(struct rbtree *);
 
 void rbtree_travers(struct rbtree *);
@@ -940,6 +941,26 @@ struct rbtree_node *rbtree_lookup_min_node(struct rbtree_node* n)
 	return n;
 }
 
+struct rbtree_node *rbtree_next(struct rbtree_node *node)
+{
+	struct rbtree_node *parent;
+
+	if (!node)
+		return NULL;
+
+	if (node->right) {
+		node = node->right;
+		while (node->left != NULL)
+			node = node->left;
+		return node;
+	}
+
+	while (node && (parent = node->parent) && node == parent->right)
+		node = parent;
+
+	return parent;
+}
+
 size_t rbtree_size(struct rbtree *tree)
 {
 	return tree->size;
@@ -960,10 +981,30 @@ void rbtree_rbtree_free(struct rbtree *tree)
 	free(tree);
 }
 
-/* Argument is the "key" element */
+static int cmp_fd(void *left, void *right)
+{
+	int l, r;
+
+	assert(left);
+	assert(right);
+
+	l = *(int *)left;
+	r = *(int *)right;
+
+	if (l < r)
+		return -1;
+	else if (l > r)
+		return 1;
+	else
+		return 0;
+}
+
 static int cmp_timespec(void *left, void *right)
 {
 	struct timespec *l, *r;
+
+	assert(left);
+	assert(right);
 
 	l = (struct timespec *)left;
 	r = (struct timespec *)right;
@@ -981,7 +1022,9 @@ static int cmp_timespec(void *left, void *right)
 		else if (l->tv_nsec > r->tv_nsec) {
 			return 1;
 		}
-		else { /* seconds AND nanoseconds identical, uniqueness via pointer value */
+		else {
+			/* seconds AND nanoseconds identical,
+			 * uniqueness via pointer value */
 			if (left < right)
 				return -1;
 			else if (left > right)
@@ -993,10 +1036,15 @@ static int cmp_timespec(void *left, void *right)
 }
 
 struct ev_data_select {
-	struct rbtree *tree;
+	/* rbtree for timers */
+	struct rbtree *tm_tree;
+	/* rbtree for read fd's */
+	struct rbtree *rd_tree;
+	/* rbtree for write fd's */
+	struct rbtree *wr_tree;
 };
 
-static struct ev *ev_new_select(void)
+static inline struct ev *ev_new_select(void)
 {
 	struct ev *ev;
 	struct ev_data_select *ev_priv_data;
@@ -1007,22 +1055,41 @@ static struct ev *ev_new_select(void)
 
 	ev_priv_data = malloc(sizeof(*ev_priv_data));
 	if (!ev_priv_data)
-		return NULL;
+		goto err_priv;
 
 	memset(ev_priv_data, 0, sizeof(*ev_priv_data));
 	ev->priv_data = ev_priv_data;
 
-	ev_priv_data->tree = rbtree_init(cmp_timespec);
-	if (!ev_priv_data->tree)
-		return NULL;
+	ev_priv_data->tm_tree = rbtree_init(cmp_timespec);
+	if (!ev_priv_data->tm_tree)
+		goto err_tree_init;
+
+	ev_priv_data->rd_tree = rbtree_init(cmp_fd);
+	if (!ev_priv_data->rd_tree)
+		goto err_rd_tree_init;
+
+	ev_priv_data->wr_tree = rbtree_init(cmp_fd);
+	if (!ev_priv_data->wr_tree)
+		goto err_wr_tree_init;
 
 	ev->size        = 0;
 	ev->break_loop  = 0;
 
 	return ev;
+
+err_wr_tree_init:
+	rbtree_rbtree_free(ev_priv_data->rd_tree);
+err_rd_tree_init:
+	rbtree_rbtree_free(ev_priv_data->tm_tree);
+err_tree_init:
+	free(ev_priv_data);
+err_priv:
+	free(ev);
+
+	return NULL;
 }
 
-static void ev_free_select(struct ev *ev)
+static inline void ev_free_select(struct ev *ev)
 {
 	struct ev_data_select *ev_priv_data;
 
@@ -1031,9 +1098,14 @@ static void ev_free_select(struct ev *ev)
 
 	ev_priv_data = ev->priv_data;
 
-	assert(ev_priv_data->tree);
+	assert(ev_priv_data->tm_tree);
+	assert(ev_priv_data->rd_tree);
+	assert(ev_priv_data->wr_tree);
 
-	rbtree_rbtree_free(ev_priv_data->tree);
+	rbtree_rbtree_free(ev_priv_data->tm_tree);
+	rbtree_rbtree_free(ev_priv_data->rd_tree);
+	rbtree_rbtree_free(ev_priv_data->wr_tree);
+
 	free(ev->priv_data);
 	free(ev);
 
@@ -1061,18 +1133,30 @@ static struct ev_entry *ev_entry_new_select_internal(void)
 	return ev_entry;
 }
 
-static struct ev_entry *ev_entry_new_select(int fd, int what,
+static inline struct ev_entry *ev_entry_new_select(int fd, int what,
 		void (*cb)(int, int, void *), void *data)
 {
-	(void) fd;
-	(void) what;
-	(void) cb;
-	(void) data;
+	struct ev_entry *ev_entry;
 
-	return NULL;
+	assert(what == EV_READ || what == EV_WRITE);
+	assert(cb);
+	assert(fd >= 0);
+
+	ev_entry = malloc(sizeof(struct ev_entry));
+	if (!ev_entry)
+		return NULL;
+
+	memset(ev_entry, 0, sizeof(struct ev_entry));
+
+	ev_entry->fd    = fd;
+	ev_entry->type  = what;
+	ev_entry->fd_cb = cb;
+	ev_entry->data  = data;
+
+	return ev_entry;
 }
 
-static struct ev_entry *ev_timer_new_select(struct timespec *timespec,
+static inline struct ev_entry *ev_timer_new_select(struct timespec *timespec,
 		void (*cb)(void *), void *data)
 {
 	struct ev_entry *ev_entry;
@@ -1093,7 +1177,7 @@ static struct ev_entry *ev_timer_new_select(struct timespec *timespec,
 	return ev_entry;
 }
 
-static void ev_entry_free_select(struct ev_entry *ev_entry)
+static inline void ev_entry_free_select(struct ev_entry *ev_entry)
 {
 	assert(ev_entry);
 	assert(ev_entry->priv_data);
@@ -1102,7 +1186,8 @@ static void ev_entry_free_select(struct ev_entry *ev_entry)
 	free(ev_entry);
 }
 
-static int ev_free_event_select(struct ev *ev, struct rbtree_node *node)
+static inline int ev_free_time_event_select(struct ev *ev,
+		struct rbtree_node *node)
 {
 	struct ev_data_select *ev_data_select;
 	struct ev_entry_data_select *ev_entry_data_select;
@@ -1121,7 +1206,7 @@ static int ev_free_event_select(struct ev *ev, struct rbtree_node *node)
 	ev_data_select = ev->priv_data;
 
 	/* remove from rbtree */
-	node = rbtree_delete_by_node(ev_data_select->tree, node);
+	node = rbtree_delete_by_node(ev_data_select->tm_tree, node);
 	if (!node) {
 		pr_debug("Failure in deleting node from rbtree\n");
 		return EV_FAILURE;
@@ -1142,7 +1227,7 @@ static int ev_timer_cancel_select(struct ev *ev, struct ev_entry *ev_entry)
 
 	ev_entry_data_select = ev_entry->priv_data;
 
-	return ev_free_event_select(ev, ev_entry_data_select->node);
+	return ev_free_time_event_select(ev, ev_entry_data_select->node);
 }
 
 /* insert timer into rbtree */
@@ -1151,7 +1236,7 @@ static int ev_select_arm_timer(struct ev *ev, struct ev_entry *ev_entry)
 	int ret;
 	struct rbtree_node *node;
 	struct ev_entry_data_select *ev_entry_data_select;
-	struct ev_data_select *ev_priv_data;
+	struct ev_data_select *ev_data_select;
 	struct timespec now;
 
 	assert(ev);
@@ -1161,7 +1246,7 @@ static int ev_select_arm_timer(struct ev *ev, struct ev_entry *ev_entry)
 
 	ev_entry_data_select = ev_entry->priv_data;
 
-	ev_priv_data = ev->priv_data;
+	ev_data_select = ev->priv_data;
 
 	/* ok, it is time to convert the offset into a absolute time */
 	ret = clock_gettime(CLOCK_REALTIME, &now);
@@ -1171,7 +1256,9 @@ static int ev_select_arm_timer(struct ev *ev, struct ev_entry *ev_entry)
 
 	timespec_add(&ev_entry->timespec, &ev_entry->timespec, &now);
 
-	node = rbtree_insert(ev_priv_data->tree, (void *)&ev_entry->timespec, (void *)ev_entry);
+	/* insert into timer tree */
+	node = rbtree_insert(ev_data_select->tm_tree,
+			(void *)&ev_entry->timespec, (void *)ev_entry);
 	if (node == NULL) {
 		return EV_FAILURE;
 	}
@@ -1184,45 +1271,276 @@ static int ev_select_arm_timer(struct ev *ev, struct ev_entry *ev_entry)
 static int ev_add_select(struct ev *ev, struct ev_entry *ev_entry)
 {
 	int ret;
+	struct ev_data_select *ev_data_select;
+	struct rbtree_node *node;
+
+	assert(ev);
+	assert(ev->priv_data);
+
+	ev_data_select = ev->priv_data;
 
 	switch (ev_entry->type) {
+	case EV_READ:
+		node = rbtree_insert(ev_data_select->rd_tree,
+				(void *)&ev_entry->fd, (void *)ev_entry);
+		if (node == NULL) {
+			pr_debug("failure in adding read ev_entry to rbtree\n");
+			return EV_FAILURE;
+		}
+		break;
+	case EV_WRITE:
+		node = rbtree_insert(ev_data_select->wr_tree,
+				(void *)&ev_entry->fd, (void *)ev_entry);
+		if (node == NULL) {
+			pr_debug("failure in adding write ev_entry to rbtree\n");
+			return EV_FAILURE;
+		}
+		break;
 	case EV_TIMEOUT:
 		ret = ev_select_arm_timer(ev, ev_entry);
+		if (ret != EV_SUCCESS)
+			return ret;
 		break;
 	default:
 		return EV_FAILURE;
 	}
 
-	if (ret != EV_SUCCESS)
-		return ret;
 
 	ev->size++;
 
 	return EV_SUCCESS;
 }
 
-int ev_del_select(struct ev *ev, struct ev_entry *ev_entry)
+static int ev_del_select(struct ev *ev, struct ev_entry *ev_entry)
 {
-	(void) ev;
-	(void) ev_entry;
+	struct ev_data_select *ev_data_select;
+	struct rbtree_node *node;
 
 	assert(ev);
-	assert(ev_entry);
+	assert(ev->priv_data);
 
-	return EV_FAILURE;
+	ev_data_select = ev->priv_data;
+
+	switch (ev_entry->type) {
+	case EV_READ:
+		node = rbtree_delete(ev_data_select->rd_tree, (void *)&ev_entry->fd);
+		if (node == NULL) {
+			pr_debug("delete failure, key not in tree\n");
+			return EV_FAILURE;
+		}
+		ev->size--;
+		break;
+	case EV_WRITE:
+		node = rbtree_delete(ev_data_select->wr_tree, (void *)&ev_entry->fd);
+		if (node == NULL) {
+			pr_debug("delete failure, key not in tree\n");
+			return EV_FAILURE;
+		}
+		ev->size--;
+		break;
+	default:
+		return EV_FAILURE;
+		break;
+	}
+
+	return EV_SUCCESS;
 }
 
-
-int ev_loop_select(struct ev *ev, uint32_t flags)
+/* process all expired timeouts. ts_next returns the timespec of the
+ * next timeout or NULL if no more timeouts are available */
+static inline int ev_loop_select_process_timer(struct ev *ev, struct timespec *ts_next)
 {
 	int ret;
 	struct timespec now;
-	struct rbtree_node *min_node;
 	struct ev_data_select *ev_data_select;
-	fd_set rfds;
-	struct timeval tv;
-	struct timespec timespec_res;
 	struct ev_entry *ev_entry;
+	struct rbtree_node *min_node;
+
+	ev_data_select = ev->priv_data;
+
+	while (1) {
+
+		/* select next element from tree and arm select loop */
+		min_node = rbtree_lookup_min_node(ev_data_select->tm_tree->root);
+		if (!min_node) {
+			/* no more timeout event are available or operated
+			 * with no timeouts at all */
+			ts_next->tv_sec = ts_next->tv_nsec = 0;
+			return EV_SUCCESS;
+		}
+
+		ev_entry = min_node->data;
+
+		ret = clock_gettime(CLOCK_REALTIME, &now);
+		if (ret < 0) {
+			return EV_FAILURE;
+		}
+
+		if (timespec_cmp(&now, &ev_entry->timespec, <)) {
+			/* ok the next timeout is in the future! We convert
+			 * the absolut time to a offset and return the value
+			 * */
+			timespec_sub(ts_next, &ev_entry->timespec, &now);
+			return EV_SUCCESS;
+		}
+
+		/* ev_entry is expired, now call the user provided callback
+		 * and free the datastructures afterwards. After that we probe
+		 * if another timeout intermediate expired */
+		assert(ev_entry->type == EV_TIMEOUT);
+
+		/* call user provided callback */
+		pr_debug("execute user callback timout 0x%p\n", min_node);
+		ev_entry->timer_cb(ev_entry->data);
+
+		ret = ev_free_time_event_select(ev, min_node);
+		if (ret != EV_SUCCESS)
+			return ret;
+
+	}
+}
+
+static int ev_loop_select_check_call_set(struct ev *ev,
+		fd_set *rd_set, fd_set *wr_set)
+{
+	struct rbtree_node *node;
+	struct ev_data_select *ev_data_select;
+	struct ev_entry *ev_entry;
+
+	assert(ev);
+	assert(ev->priv_data);
+	assert(rd_set);
+	assert(wr_set);
+
+	ev_data_select = ev->priv_data;
+
+	/* iterate over rd_tree */
+	node = rbtree_lookup_min_node(ev_data_select->rd_tree->root);
+	if (node) {
+		ev_entry = node->data;
+
+		if (FD_ISSET(ev_entry->fd, rd_set)) {
+			ev_entry->fd_cb(ev_entry->fd, EV_READ, ev_entry->data);
+		}
+
+		while ((node = rbtree_next(node)) != NULL) {
+
+			ev_entry = node->data;
+
+			assert(ev_entry->type & EV_READ);
+
+			if (FD_ISSET(ev_entry->fd, rd_set)) {
+				ev_entry->fd_cb(ev_entry->fd, EV_READ, ev_entry->data);
+			}
+		}
+	}
+
+	/* iterate over rd_tree */
+	node = rbtree_lookup_min_node(ev_data_select->wr_tree->root);
+	if (node) {
+		ev_entry = node->data;
+
+		if (FD_ISSET(ev_entry->fd, wr_set)) {
+			ev_entry->fd_cb(ev_entry->fd, EV_WRITE, ev_entry->data);
+		}
+
+		while ((node = rbtree_next(node)) != NULL) {
+
+			ev_entry = node->data;
+
+			if (FD_ISSET(ev_entry->fd, wr_set)) {
+				ev_entry->fd_cb(ev_entry->fd, EV_WRITE, ev_entry->data);
+			}
+		}
+	}
+
+	return EV_SUCCESS;
+}
+
+/* returns the maximum fd or negative code for error */
+static inline int ev_loop_select_build_set(struct ev *ev,
+		fd_set *rd_set, fd_set *wr_set, int *max_fd)
+{
+	struct rbtree_node *node;
+	struct ev_data_select *ev_data_select;
+	struct ev_entry *ev_entry;
+
+	assert(ev);
+	assert(ev->priv_data);
+	assert(rd_set);
+	assert(wr_set);
+
+	*max_fd = -1;
+
+	FD_ZERO(rd_set);
+	FD_ZERO(wr_set);
+
+	ev_data_select = ev->priv_data;
+
+	/* iterate over rd_tree */
+	node = rbtree_lookup_min_node(ev_data_select->rd_tree->root);
+	if (node) {
+		ev_entry = node->data;
+
+		assert(ev_entry->type & EV_READ);
+
+		pr_debug("add FD %d for read\n", ev_entry->fd);
+		FD_SET(ev_entry->fd, rd_set);
+
+		if (ev_entry->fd > *max_fd)
+			*max_fd = ev_entry->fd;
+
+
+		while ((node = rbtree_next(node)) != NULL) {
+
+			ev_entry = node->data;
+
+			assert(ev_entry->type & EV_READ);
+
+			pr_debug("add FD %d for read\n", ev_entry->fd);
+			FD_SET(ev_entry->fd, rd_set);
+
+			if (ev_entry->fd > *max_fd)
+				*max_fd = ev_entry->fd;
+		}
+	}
+
+	/* iterate over rd_tree */
+	node = rbtree_lookup_min_node(ev_data_select->wr_tree->root);
+	if (node) {
+		ev_entry = node->data;
+
+		assert(ev_entry->type & EV_WRITE);
+
+		pr_debug("add FD %d for write\n", ev_entry->fd);
+		FD_SET(ev_entry->fd, wr_set);
+
+		if (ev_entry->fd > *max_fd)
+			*max_fd = ev_entry->fd;
+
+		while ((node = rbtree_next(node)) != NULL) {
+
+			ev_entry = node->data;
+
+			assert(ev_entry->type & EV_WRITE);
+
+			pr_debug("add FD %d for write\n", ev_entry->fd);
+			FD_SET(ev_entry->fd, wr_set);
+
+			if (ev_entry->fd > *max_fd)
+				*max_fd = ev_entry->fd;
+		}
+	}
+
+	return EV_SUCCESS;
+}
+
+static int ev_loop_select(struct ev *ev, uint32_t flags)
+{
+	int ret, max_fd;
+	fd_set rd_fds, wr_fds;
+	struct timeval tv, *tvp;
+	struct timespec timespec_res;
 
 	/* not used yet and ignored */
 	(void) flags;
@@ -1230,63 +1548,55 @@ int ev_loop_select(struct ev *ev, uint32_t flags)
 	assert(ev);
 	assert(ev->priv_data);
 
-	ev_data_select = ev->priv_data;
+	do {
 
-	while (1) {
+		/* check for pending timeouts */
+		ret = ev_loop_select_process_timer(ev, &timespec_res);
+		if (ret != EV_SUCCESS) {
+			pr_debug("ev_loop_select_process_timer() return a failure: %d\n",
+					ret);
+			return ret;
+		}
 
-		ret = clock_gettime(CLOCK_REALTIME, &now);
+		if (timespec_res.tv_sec || timespec_res.tv_nsec) {
+			tv.tv_sec  = timespec_res.tv_sec;
+			tv.tv_usec = timespec_res.tv_nsec / 1000;
+			tvp = &tv;
+		} else {
+			/* we will block endless in select() - until a fd
+			 * becomes read/writeable */
+			tvp = NULL;
+		}
+
+		ret = ev_loop_select_build_set(ev, &rd_fds, &wr_fds, &max_fd);
 		if (ret < 0) {
+			pr_debug("failure in ev_loop_select_build_set()\n");
 			return EV_FAILURE;
 		}
 
-		/* select next element from tree and arm select loop */
-		min_node = rbtree_lookup_min_node(ev_data_select->tree->root);
-		if (!min_node) {
-			/* no timers in the queue anymore - exit loop */
+		/* check if there is no more events available, if so we return
+		 * gracelly */
+		if (!tvp && max_fd == -1)
 			return EV_SUCCESS;
-		}
 
-		ev_entry = min_node->data;
-
-		if (timespec_cmp(&now, &ev_entry->timespec, >)) {
-
-			pr_debug("event %p executed\n", min_node);
-
-			/* call user provided callback */
-			ev_entry->timer_cb(ev_entry->data);
-
-			ret = ev_free_event_select(ev, min_node);
-			if (ret != EV_SUCCESS)
-				return ret;
-
-			continue;
-		}
-
-		/* ok, next timer is in the future, arm select() */
-
-		FD_ZERO(&rfds);
-
-		/* convert from absolut to offset */
-		timespec_sub(&timespec_res, &ev_entry->timespec, &now);
-
-		tv.tv_sec  = timespec_res.tv_sec;
-		tv.tv_usec = timespec_res.tv_nsec / 1000;
-
-		pr_debug("call select() with timeout %ld:%ld\n", tv.tv_sec, tv.tv_usec);
-
-		ret = select(0, &rfds, NULL, NULL, &tv);
+		ret = select(max_fd + 1, &rd_fds, &wr_fds, NULL, tvp);
 		if (ret == -1) {
 			pr_debug("select(): %s", strerror(errno));
 			return EV_FAILURE;
 		}
-		else if (ret)
-			printf("Data is available now.\n");
-			/* FD_ISSET(0, &rfds) will be true. */
-		else {
-			/* timer fired */
+		else if (ret) {
+			ret = ev_loop_select_check_call_set(ev, &rd_fds, &wr_fds);
+			if (ret < 0) {
+				pr_debug("failure in ev_loop_select_build_set()\n");
+				return EV_FAILURE;
+			}
+		} else {
+			/* timer fired, handled in next loop iteration by
+			 * ev_loop_select_process_timer() */
 		}
 
-	}
+
+	} while (1);
 }
 
 /* actual epoll/timer_fd API methods definitions is here */

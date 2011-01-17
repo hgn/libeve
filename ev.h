@@ -25,9 +25,11 @@ struct ev_entry {
 	int fd;
 	int type; /* EV_READ, EV_WRITE or EV_TIMEOUT */
 	struct timespec timespec;
-	void (*fd_cb)(int, int, void *);
 
-	void (*timer_cb)(void *);
+	union {
+		void (*fd_cb)(int, int, void *);
+		void (*timer_cb)(void *);
+	};
 	void *data;
 
 	/* implementation specific data (e.g. for epoll, select) */
@@ -38,8 +40,6 @@ struct ev *ev_new(void);
 void ev_free(struct ev *);
 static inline unsigned int ev_size(struct ev *e) { return e->size; }
 
-/* no need to free an ev_entry - it is automatically
- * when scheduled */
 struct ev_entry *ev_entry_new(int, int, void (*cb)(int, int, void *), void *);
 struct ev_entry *ev_timer_new(struct timespec *, void (*cb)(void *), void *);
 void ev_entry_free(struct ev_entry *);
