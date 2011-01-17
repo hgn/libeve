@@ -14,7 +14,7 @@ CFLAGS := -Wall -Wextra -Wunused -pipe -Wwrite-strings -Wsign-compare \
 
 #CFLAGS += -ggdb3 -Werror
 
-EXTRA_CFLAGS := -DHAVE_SELECT -DLIBEVE_DEBUG
+EXTRA_CFLAGS := -DHAVE_EPOLL -DLIBEVE_DEBUG
 
 all: test bench $(LIBRARY)
 

@@ -1,5 +1,5 @@
-#ifndef EV_H
-#define EV_H
+#ifndef LIBEVE_H
+#define LIBEVE_H
 
 #include <sys/time.h>
 #include <inttypes.h>
@@ -22,14 +22,22 @@ struct ev {
 };
 
 struct ev_entry {
+
+	/* monitored FD if type is EV_READ or EV_WRITE */
 	int fd;
-	int type; /* EV_READ, EV_WRITE or EV_TIMEOUT */
+
+	/* EV_READ, EV_WRITE or EV_TIMEOUT */
+	int type;
+
+	/* timeout val if type is EV_TIMEOUT */
 	struct timespec timespec;
 
 	union {
 		void (*fd_cb)(int, int, void *);
 		void (*timer_cb)(void *);
 	};
+
+	/* user provided pointer to data */
 	void *data;
 
 	/* implementation specific data (e.g. for epoll, select) */
@@ -41,15 +49,15 @@ void ev_free(struct ev *);
 static inline unsigned int ev_size(struct ev *e) { return e->size; }
 
 struct ev_entry *ev_entry_new(int, int, void (*cb)(int, int, void *), void *);
-struct ev_entry *ev_timer_new(struct timespec *, void (*cb)(void *), void *);
+int ev_del(struct ev *, struct ev_entry *);
 void ev_entry_free(struct ev_entry *);
 
+struct ev_entry *ev_timer_new(struct timespec *, void (*cb)(void *), void *);
 /* struct ev_event * is freed by ev_timer_cancel - user provided callbacks
  * and data not - sure. So do not dereference ev_entry afterwards */
 int ev_timer_cancel(struct ev *, struct ev_entry *);
 
 int ev_add(struct ev *, struct ev_entry *);
-int ev_del(struct ev *, struct ev_entry *);
 int ev_loop(struct ev *, uint32_t);
 int ev_run_out(struct ev *);
 
@@ -57,4 +65,4 @@ int ev_run_out(struct ev *);
 void ev_entry_set_data(struct ev_entry *, void *);
 int ev_set_non_blocking(int fd);
 
-#endif /* EV_H */
+#endif /* LIBEVE_H */

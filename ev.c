@@ -1484,7 +1484,6 @@ static inline int ev_loop_select_build_set(struct ev *ev,
 
 		assert(ev_entry->type & EV_READ);
 
-		pr_debug("add FD %d for read\n", ev_entry->fd);
 		FD_SET(ev_entry->fd, rd_set);
 
 		if (ev_entry->fd > *max_fd)
@@ -1497,7 +1496,6 @@ static inline int ev_loop_select_build_set(struct ev *ev,
 
 			assert(ev_entry->type & EV_READ);
 
-			pr_debug("add FD %d for read\n", ev_entry->fd);
 			FD_SET(ev_entry->fd, rd_set);
 
 			if (ev_entry->fd > *max_fd)
@@ -1548,7 +1546,7 @@ static int ev_loop_select(struct ev *ev, uint32_t flags)
 	assert(ev);
 	assert(ev->priv_data);
 
-	do {
+	while (ev->size > 0) {
 
 		/* check for pending timeouts */
 		ret = ev_loop_select_process_timer(ev, &timespec_res);
@@ -1583,8 +1581,7 @@ static int ev_loop_select(struct ev *ev, uint32_t flags)
 		if (ret == -1) {
 			pr_debug("select(): %s", strerror(errno));
 			return EV_FAILURE;
-		}
-		else if (ret) {
+		} else if (ret) {
 			ret = ev_loop_select_check_call_set(ev, &rd_fds, &wr_fds);
 			if (ret < 0) {
 				pr_debug("failure in ev_loop_select_build_set()\n");
@@ -1594,9 +1591,9 @@ static int ev_loop_select(struct ev *ev, uint32_t flags)
 			/* timer fired, handled in next loop iteration by
 			 * ev_loop_select_process_timer() */
 		}
+	}
 
-
-	} while (1);
+	return EV_SUCCESS;
 }
 
 /* actual epoll/timer_fd API methods definitions is here */
