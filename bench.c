@@ -18,20 +18,20 @@ static struct ev *ev;
 
 static void read_cd(int fd, int what, void *data)
 {
-	int buf, ret;
-	struct ev_entry *ev_e;
+	struct timeval *tv1, tv2;
 
 	(void) what;
+	(void) fd;
 
-	ev_e = data;
+	tv1 = (struct timeval *)data;
 
-	read(fd, &buf, sizeof(buf));
+	gettimeofday(&tv2, NULL);
 
-	ret = ev_del(ev, ev_e);
-	if (ret != EV_SUCCESS)
-		fprintf(stderr, "failure in delete operation\n");
+	fprintf(stdout, "%ld microseconds for %d pipes (%d for read/write pipe count)\n",
+			((tv2.tv_sec - tv1->tv_sec) * 1000000) + (tv2.tv_usec - tv1->tv_usec),
+			pipes_no, pipes_no * 2);
 
-	return;
+	exit(EXIT_SUCCESS);
 }
 
 static void process_child(void)
@@ -43,9 +43,10 @@ static void process_child(void)
 		close(pipes[i]);
 	}
 
-	for (i = 1; i < pipes_no; i += 2) {
-		write(pipes[i], "x", 1);
-	}
+	for (i = 1; i < pipes_no; i += 2)
+		;
+
+	write(pipes[i - 2], "x", 1);
 }
 
 
@@ -53,7 +54,7 @@ int main(int ac, char **av)
 {
 	int i, ret, flags = 0; pid_t pid;
 	struct ev_entry *ev_e;
-	struct timeval tv1, tv2;
+	struct timeval tv1;
 
 	if (ac != 2) {
 		fprintf(stderr, "Usage: %s <pipes>\n", av[0]);
@@ -105,12 +106,11 @@ int main(int ac, char **av)
 			exit(EXIT_FAILURE);
 		}
 
-		ev_e = ev_entry_new(pipes[i], EV_READ, read_cd, NULL);
+		ev_e = ev_entry_new(pipes[i], EV_READ, read_cd, &tv1);
 		if (!ev_e) {
 			fprintf(stderr, "Cannot create event entry\n");
 			exit(EXIT_FAILURE);
 		}
-		ev_entry_set_data(ev_e, ev_e);
 
 		ret = ev_add(ev, ev_e);
 		if (ret != EV_SUCCESS) {
@@ -123,11 +123,6 @@ int main(int ac, char **av)
 
 	gettimeofday(&tv1, NULL);
 	ev_loop(ev, flags);
-	gettimeofday(&tv2, NULL);
-
-	fprintf(stdout, "%ld microseconds for %d pipes (%d for read/write pipe count)\n",
-			((tv2.tv_sec - tv1.tv_sec) * 1000000) + (tv2.tv_usec - tv1.tv_usec),
-			pipes_no, pipes_no * 2);
 
 	ev_free(ev);
 
