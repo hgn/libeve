@@ -27,9 +27,11 @@
 #if defined(LIBEVE_DEBUG)
 #define pr_debug(fmt_str, ...) \
 	fprintf(stderr, fmt_str, ##__VA_ARGS__)
+#define	eve_assert(x) assert(x)
 #else
 #define pr_debug(fmt_str, ...) \
         ({ if (0) fprintf(stderr, fmt_str, ##__VA_ARGS__); 0; })
+#define	eve_assert(x)
 #endif
 
 #include <stdlib.h>
@@ -92,7 +94,7 @@ inline void ev_entry_set_data(struct ev_entry *entry, void *data)
 
 int ev_run_out(struct ev *ev)
 {
-	assert(ev);
+	eve_assert(ev);
 	ev->break_loop = 1;
 	return EV_SUCCESS;
 }
@@ -129,7 +131,7 @@ struct ev_entry_data_epoll {
 
 static inline void ev_free_epoll(struct ev *ev)
 {
-	assert(ev);
+	eve_assert(ev);
 
 	/* close epoll descriptor */
 	close(ev->fd);
@@ -185,9 +187,9 @@ static inline struct ev_entry *ev_entry_new_epoll(int fd, int what,
 	struct ev_entry *ev_entry;
 	struct ev_entry_data_epoll *ev_entry_data_epoll;
 
-	assert(what == EV_READ || what == EV_WRITE);
-	assert(cb);
-	assert(fd >= 0);
+	eve_assert(what == EV_READ || what == EV_WRITE);
+	eve_assert(cb);
+	eve_assert(fd >= 0);
 
 	ev_entry = ev_entry_new_epoll_internal();
 	if (!ev_entry)
@@ -220,7 +222,7 @@ static inline struct ev_entry *ev_timer_new_epoll(struct timespec *timespec,
 {
 	struct ev_entry *ev_entry;
 
-	assert(timespec && cb);
+	eve_assert(timespec && cb);
 
 	ev_entry = ev_entry_new_epoll_internal();
 	if (!ev_entry)
@@ -237,8 +239,8 @@ static inline struct ev_entry *ev_timer_new_epoll(struct timespec *timespec,
 
 static inline void ev_entry_free_epoll(struct ev_entry *ev_entry)
 {
-	assert(ev_entry);
-	assert(ev_entry->priv_data);
+	eve_assert(ev_entry);
+	eve_assert(ev_entry->priv_data);
 
 	free(ev_entry->priv_data);
 	memset(ev_entry, 0, sizeof(struct ev_entry));
@@ -266,7 +268,7 @@ static int ev_arm_timerfd_internal(struct ev_entry *ev_entry)
 	if (new_value.it_value.tv_nsec >= 1000000000) {
 		new_value.it_value.tv_sec++;
 		new_value.it_value.tv_nsec -= 1000000000;
-		assert(new_value.it_value.tv_nsec > 0);
+		eve_assert(new_value.it_value.tv_nsec > 0);
 	}
 
 	new_value.it_interval.tv_sec  = 0;
@@ -296,8 +298,8 @@ static inline int ev_add_epoll(struct ev *ev, struct ev_entry *ev_entry)
 	struct epoll_event epoll_ev;
 	struct ev_entry_data_epoll *ev_entry_data_epoll;
 
-	assert(ev);
-	assert(ev_entry);
+	eve_assert(ev);
+	eve_assert(ev_entry);
 
 	ev_entry_data_epoll = ev_entry->priv_data;
 
@@ -327,8 +329,8 @@ static inline int ev_del_epoll(struct ev *ev, struct ev_entry *ev_entry)
 	int ret;
 	struct epoll_event epoll_ev;
 
-	assert(ev);
-	assert(ev_entry);
+	eve_assert(ev);
+	eve_assert(ev_entry);
 
 	memset(&epoll_ev, 0, sizeof(struct epoll_event));
 
@@ -346,8 +348,8 @@ static inline int ev_timer_cancel_epoll(struct ev *ev, struct ev_entry *ev_entry
 {
 	int ret;
 
-	assert(ev_entry);
-	assert(ev_entry->type == EV_TIMEOUT);
+	eve_assert(ev_entry);
+	eve_assert(ev_entry->type == EV_TIMEOUT);
 
 	ret = ev_del_epoll(ev, ev_entry);
 	if (ret != EV_SUCCESS)
@@ -375,7 +377,7 @@ static inline void ev_process_call_epoll_timeout(
 	if ((ret < (ssize_t)sizeof(int64_t)) ||
 			(time_buf > 1)) {
 		/* failure - should not happens: kernel bug */
-		assert(0);
+		eve_assert(0);
 	}
 
 	ev_del_epoll(ev, ev_entry);
@@ -389,7 +391,7 @@ static inline void ev_process_call_internal(
 {
 	(void) ev;
 
-	assert(ev_entry);
+	eve_assert(ev_entry);
 
 	switch (ev_entry->type) {
 		case EV_READ:
@@ -412,7 +414,7 @@ static inline int ev_loop_epoll(struct ev *ev, uint32_t flags)
 	int nfds, i;
 	struct epoll_event events[EVE_EPOLL_ARRAY_SIZE];
 
-	assert(ev);
+	eve_assert(ev);
 
 	(void) flags; /* currently ignored */
 
@@ -536,8 +538,6 @@ void rbtree_node_free(struct rbtree_node *);
 /* deletes rbtree only, rbtree_node are NOT freed */
 void rbtree_rbtree_free(struct rbtree *);
 
-void rbtree_travers(struct rbtree *);
-
 static struct rbtree_node *sibling(struct rbtree_node *n);
 static struct rbtree_node *uncle(struct rbtree_node *n);
 static enum rbtree_color node_color(struct rbtree_node *n);
@@ -561,9 +561,9 @@ static void delete_6(struct rbtree *, struct rbtree_node *);
 
 static struct rbtree_node* grandparent(struct rbtree_node* n) {
 
-	assert(n);
-	assert(n->parent);
-	assert(n->parent->parent);
+	eve_assert(n);
+	eve_assert(n->parent);
+	eve_assert(n->parent->parent);
 
 	return n->parent->parent;
 }
@@ -649,11 +649,11 @@ static void delete_6(struct rbtree* t, struct rbtree_node* n)
 	n->parent->color = BLACK;
 
 	if (n == n->parent->left) {
-		assert (node_color(sibling(n)->right) == RED);
+		eve_assert (node_color(sibling(n)->right) == RED);
 		sibling(n)->right->color = BLACK;
 		rotate_left(t, n->parent);
 	} else {
-		assert (node_color(sibling(n)->left) == RED);
+		eve_assert (node_color(sibling(n)->left) == RED);
 		sibling(n)->left->color = BLACK;
 		rotate_right(t, n->parent);
 	}
@@ -706,7 +706,7 @@ static void insert_5(struct rbtree* t, struct rbtree_node* n)
 	if (n == n->parent->left && n->parent == grandparent(n)->left) {
 		rotate_right(t, grandparent(n));
 	} else {
-		assert (n == n->parent->right && n->parent == grandparent(n)->right);
+		eve_assert (n == n->parent->right && n->parent == grandparent(n)->right);
 		rotate_left(t, grandparent(n));
 	}
 }
@@ -714,8 +714,8 @@ static void insert_5(struct rbtree* t, struct rbtree_node* n)
 
 static struct rbtree_node* sibling(struct rbtree_node* n)
 {
-	assert(n != NULL);
-	assert(n->parent != NULL);
+	eve_assert(n != NULL);
+	eve_assert(n->parent != NULL);
 
 	if (n == n->parent->left)
 		return n->parent->right;
@@ -725,9 +725,9 @@ static struct rbtree_node* sibling(struct rbtree_node* n)
 
 static struct rbtree_node* uncle(struct rbtree_node* n)
 {
-	assert(n != NULL);
-	assert(n->parent != NULL);
-	assert(n->parent->parent != NULL);
+	eve_assert(n != NULL);
+	eve_assert(n->parent != NULL);
+	eve_assert(n->parent->parent != NULL);
 
 	return sibling(n->parent);
 }
@@ -767,7 +767,7 @@ struct rbtree_node *rbtree_lookup(struct rbtree* t, void* key) {
 		} else if (comp_result < 0) {
 			n = n->left;
 		} else {
-			assert(comp_result > 0);
+			eve_assert(comp_result > 0);
 			n = n->right;
 		}
 	}
@@ -856,7 +856,7 @@ struct rbtree_node *rbtree_insert(struct rbtree* t, void *key, void *data)
 				n = n->left;
 			}
 		} else {
-			assert (comp_result > 0);
+			eve_assert (comp_result > 0);
 			if (n->right == NULL) {
 				n->right = new_node;
 				break;
@@ -882,8 +882,8 @@ struct rbtree_node *rbtree_delete_by_node(struct rbtree* t, struct rbtree_node *
 {
 	struct rbtree_node* child;
 
-	assert(t);
-	assert(n);
+	eve_assert(t);
+	eve_assert(n);
 
 	if (n->left != NULL && n->right != NULL) {
 		/* Copy key/data from predecessor and then delete it instead */
@@ -893,7 +893,7 @@ struct rbtree_node *rbtree_delete_by_node(struct rbtree* t, struct rbtree_node *
 		n = pred;
 	}
 
-	assert(n->left == NULL || n->right == NULL);
+	eve_assert(n->left == NULL || n->right == NULL);
 
 	child = n->right == NULL ? n->left : n->right;
 	if (node_color(n) == BLACK) {
@@ -985,8 +985,8 @@ static int cmp_fd(void *left, void *right)
 {
 	int l, r;
 
-	assert(left);
-	assert(right);
+	eve_assert(left);
+	eve_assert(right);
 
 	l = *(int *)left;
 	r = *(int *)right;
@@ -1003,8 +1003,8 @@ static int cmp_timespec(void *left, void *right)
 {
 	struct timespec *l, *r;
 
-	assert(left);
-	assert(right);
+	eve_assert(left);
+	eve_assert(right);
 
 	l = (struct timespec *)left;
 	r = (struct timespec *)right;
@@ -1093,14 +1093,14 @@ static inline void ev_free_select(struct ev *ev)
 {
 	struct ev_data_select *ev_priv_data;
 
-	assert(ev);
-	assert(ev->priv_data);
+	eve_assert(ev);
+	eve_assert(ev->priv_data);
 
 	ev_priv_data = ev->priv_data;
 
-	assert(ev_priv_data->tm_tree);
-	assert(ev_priv_data->rd_tree);
-	assert(ev_priv_data->wr_tree);
+	eve_assert(ev_priv_data->tm_tree);
+	eve_assert(ev_priv_data->rd_tree);
+	eve_assert(ev_priv_data->wr_tree);
 
 	rbtree_rbtree_free(ev_priv_data->tm_tree);
 	rbtree_rbtree_free(ev_priv_data->rd_tree);
@@ -1138,9 +1138,9 @@ static inline struct ev_entry *ev_entry_new_select(int fd, int what,
 {
 	struct ev_entry *ev_entry;
 
-	assert(what == EV_READ || what == EV_WRITE);
-	assert(cb);
-	assert(fd >= 0);
+	eve_assert(what == EV_READ || what == EV_WRITE);
+	eve_assert(cb);
+	eve_assert(fd >= 0);
 
 	ev_entry = malloc(sizeof(struct ev_entry));
 	if (!ev_entry)
@@ -1161,8 +1161,8 @@ static inline struct ev_entry *ev_timer_new_select(struct timespec *timespec,
 {
 	struct ev_entry *ev_entry;
 
-	assert(timespec);
-	assert(cb);
+	eve_assert(timespec);
+	eve_assert(cb);
 
 	ev_entry = ev_entry_new_select_internal();
 	if (!ev_entry)
@@ -1179,8 +1179,8 @@ static inline struct ev_entry *ev_timer_new_select(struct timespec *timespec,
 
 static inline void ev_entry_free_select(struct ev_entry *ev_entry)
 {
-	assert(ev_entry);
-	assert(ev_entry->priv_data);
+	eve_assert(ev_entry);
+	eve_assert(ev_entry->priv_data);
 
 	free(ev_entry->priv_data);
 	free(ev_entry);
@@ -1193,15 +1193,15 @@ static inline int ev_free_time_event_select(struct ev *ev,
 	struct ev_entry_data_select *ev_entry_data_select;
 	struct ev_entry *ev_entry;
 
-	assert(ev);
-	assert(ev->priv_data);
-	assert(node);
-	assert(node->data);
+	eve_assert(ev);
+	eve_assert(ev->priv_data);
+	eve_assert(node);
+	eve_assert(node->data);
 
 	ev_entry = node->data;
 	ev_entry_data_select = ev_entry->priv_data;
 
-	assert(ev_entry_data_select);
+	eve_assert(ev_entry_data_select);
 
 	ev_data_select = ev->priv_data;
 
@@ -1239,10 +1239,10 @@ static int ev_select_arm_timer(struct ev *ev, struct ev_entry *ev_entry)
 	struct ev_data_select *ev_data_select;
 	struct timespec now;
 
-	assert(ev);
-	assert(ev->priv_data);
-	assert(ev_entry);
-	assert(ev_entry->priv_data);
+	eve_assert(ev);
+	eve_assert(ev->priv_data);
+	eve_assert(ev_entry);
+	eve_assert(ev_entry->priv_data);
 
 	ev_entry_data_select = ev_entry->priv_data;
 
@@ -1274,8 +1274,8 @@ static int ev_add_select(struct ev *ev, struct ev_entry *ev_entry)
 	struct ev_data_select *ev_data_select;
 	struct rbtree_node *node;
 
-	assert(ev);
-	assert(ev->priv_data);
+	eve_assert(ev);
+	eve_assert(ev->priv_data);
 
 	ev_data_select = ev->priv_data;
 
@@ -1316,8 +1316,8 @@ static int ev_del_select(struct ev *ev, struct ev_entry *ev_entry)
 	struct ev_data_select *ev_data_select;
 	struct rbtree_node *node;
 
-	assert(ev);
-	assert(ev->priv_data);
+	eve_assert(ev);
+	eve_assert(ev->priv_data);
 
 	ev_data_select = ev->priv_data;
 
@@ -1387,7 +1387,7 @@ static inline int ev_loop_select_process_timer(struct ev *ev, struct timespec *t
 		/* ev_entry is expired, now call the user provided callback
 		 * and free the datastructures afterwards. After that we probe
 		 * if another timeout intermediate expired */
-		assert(ev_entry->type == EV_TIMEOUT);
+		eve_assert(ev_entry->type == EV_TIMEOUT);
 
 		/* call user provided callback */
 		pr_debug("execute user callback timout 0x%p\n", min_node);
@@ -1407,10 +1407,10 @@ static int ev_loop_select_check_call_set(struct ev *ev,
 	struct ev_data_select *ev_data_select;
 	struct ev_entry *ev_entry;
 
-	assert(ev);
-	assert(ev->priv_data);
-	assert(rd_set);
-	assert(wr_set);
+	eve_assert(ev);
+	eve_assert(ev->priv_data);
+	eve_assert(rd_set);
+	eve_assert(wr_set);
 
 	ev_data_select = ev->priv_data;
 
@@ -1427,7 +1427,7 @@ static int ev_loop_select_check_call_set(struct ev *ev,
 
 			ev_entry = node->data;
 
-			assert(ev_entry->type & EV_READ);
+			eve_assert(ev_entry->type & EV_READ);
 
 			if (FD_ISSET(ev_entry->fd, rd_set)) {
 				ev_entry->fd_cb(ev_entry->fd, EV_READ, ev_entry->data);
@@ -1465,10 +1465,10 @@ static inline int ev_loop_select_build_set(struct ev *ev,
 	struct ev_data_select *ev_data_select;
 	struct ev_entry *ev_entry;
 
-	assert(ev);
-	assert(ev->priv_data);
-	assert(rd_set);
-	assert(wr_set);
+	eve_assert(ev);
+	eve_assert(ev->priv_data);
+	eve_assert(rd_set);
+	eve_assert(wr_set);
 
 	*max_fd = -1;
 
@@ -1482,7 +1482,7 @@ static inline int ev_loop_select_build_set(struct ev *ev,
 	if (node) {
 		ev_entry = node->data;
 
-		assert(ev_entry->type & EV_READ);
+		eve_assert(ev_entry->type & EV_READ);
 
 		FD_SET(ev_entry->fd, rd_set);
 
@@ -1494,7 +1494,7 @@ static inline int ev_loop_select_build_set(struct ev *ev,
 
 			ev_entry = node->data;
 
-			assert(ev_entry->type & EV_READ);
+			eve_assert(ev_entry->type & EV_READ);
 
 			FD_SET(ev_entry->fd, rd_set);
 
@@ -1508,7 +1508,7 @@ static inline int ev_loop_select_build_set(struct ev *ev,
 	if (node) {
 		ev_entry = node->data;
 
-		assert(ev_entry->type & EV_WRITE);
+		eve_assert(ev_entry->type & EV_WRITE);
 
 		pr_debug("add FD %d for write\n", ev_entry->fd);
 		FD_SET(ev_entry->fd, wr_set);
@@ -1520,7 +1520,7 @@ static inline int ev_loop_select_build_set(struct ev *ev,
 
 			ev_entry = node->data;
 
-			assert(ev_entry->type & EV_WRITE);
+			eve_assert(ev_entry->type & EV_WRITE);
 
 			pr_debug("add FD %d for write\n", ev_entry->fd);
 			FD_SET(ev_entry->fd, wr_set);
@@ -1543,8 +1543,8 @@ static int ev_loop_select(struct ev *ev, uint32_t flags)
 	/* not used yet and ignored */
 	(void) flags;
 
-	assert(ev);
-	assert(ev->priv_data);
+	eve_assert(ev);
+	eve_assert(ev->priv_data);
 
 	while (ev->size > 0) {
 
@@ -1596,7 +1596,7 @@ static int ev_loop_select(struct ev *ev, uint32_t flags)
 	return EV_SUCCESS;
 }
 
-/* actual epoll/timer_fd API methods definitions is here */
+/* actual select API methods definitions is here */
 struct ev *ev_new(void)
 {
 	return ev_new_select();
