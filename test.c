@@ -28,7 +28,7 @@ void timer_cd(void *data)
 	}
 
 	ret = ev_add(ev, ev_e);
-	if (ret != EV_SUCCESS) {
+	if (ret != 0) {
 		fprintf(stderr, "Cannot add entry to event handler (%d)\n", i);
 	}
 
@@ -46,7 +46,7 @@ static void cancel_timer_cb(void *data)
 	struct ev_wrapper *ev_wrapper = data;
 
 	ret = ev_timer_cancel(ev_wrapper->ev, ev_wrapper->ev_entry);
-	if (ret != EV_SUCCESS) {
+	if (ret != 0) {
 		fprintf(stderr, "failed to cancel timer\n");
 		exit(EXIT_FAILURE);
 	}
@@ -73,7 +73,7 @@ static int do_cancel_test(struct ev *ev)
 	}
 
 	ret = ev_add(ev, eve1);
-	if (ret != EV_SUCCESS) {
+	if (ret != 0) {
 		fprintf(stderr, "Cannot add entry to event handler\n");
 		exit(EXIT_FAILURE);
 	}
@@ -95,7 +95,7 @@ static int do_cancel_test(struct ev *ev)
 	}
 
 	ret = ev_add(ev, eve2);
-	if (ret != EV_SUCCESS) {
+	if (ret != 0) {
 		fprintf(stderr, "Cannot add entry to event handler\n");
 		exit(EXIT_FAILURE);
 	}
@@ -111,18 +111,17 @@ static int do_cancel_test(struct ev *ev)
 
 int main(void)
 {
-	int ret;
 	struct ev *ev;
 
-	ev = ev_new();
+	ev = ev_new(0);
 	if (!ev) {
 		fprintf(stderr, "Cannot create event handler\n");
 		return EXIT_FAILURE;
 	}
 
-	ret = do_cancel_test(ev);
+	do_cancel_test(ev);
 
-	ev_free(ev);
+	ev_destroy(ev);
 
 	return EXIT_SUCCESS;
 
@@ -135,7 +134,7 @@ int main(void)
 	}
 
 	ret = ev_add(ev, ev_e);
-	if (ret != EV_SUCCESS) {
+	if (ret != 0) {
 		fprintf(stderr, "Cannot add entry to event handler\n");
 		goto err_add;
 	}

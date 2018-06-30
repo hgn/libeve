@@ -78,6 +78,48 @@ do {                                                      \
 	}                                                 \
 } while (0)
 
+struct ev {
+	int fd;
+	int break_loop;
+	unsigned int size;
+
+	/* implementation specific data, e.g. select timer handling
+	 * will use this to store the rbtree */
+	void *priv_data;
+};
+
+struct ev_entry {
+
+	/* monitored FD if type is EV_READ or EV_WRITE */
+	int fd;
+
+	/* EV_READ, EV_WRITE or EV_TIMEOUT */
+	int type;
+
+	/* timeout val if type is EV_TIMEOUT */
+	struct timespec timespec;
+
+	union {
+		void (*fd_cb)(int, int, void *);
+		void (*timer_cb)(void *);
+	};
+
+	/* user provided pointer to data */
+	void *data;
+
+	/* implementation specific data (e.g. for epoll, select) */
+	void *priv_data;
+};
+
+unsigned int ev_size(struct ev *e) {
+	return e->size;
+}
+
+int ev_fd(struct ev *e) {
+	return e->fd;
+}
+
+
 static struct ev *struct_ev_new_internal(void)
 {
 	struct ev *ev;
@@ -100,7 +142,7 @@ int ev_run_out(struct ev *ev)
 {
 	eve_assert(ev);
 	ev->break_loop = 1;
-	return EV_SUCCESS;
+	return 0;
 }
 
 /* similar for all implementations, at least
@@ -111,13 +153,13 @@ int ev_set_non_blocking(int fd) {
 
 	flags = fcntl(fd, F_GETFL, 0);
 	if (flags < 0)
-		return EV_FAILURE;
+		return -EINVAL;
 
 	flags = fcntl(fd, F_SETFL, flags | O_NONBLOCK);
 	if (flags < 0)
-		return EV_FAILURE;
+		return -EINVAL;
 
-	return EV_SUCCESS;
+	return 0;
 }
 
 
@@ -125,35 +167,53 @@ struct ev_entry_data_epoll {
 	uint32_t flags;
 };
 
-#define	EVE_EPOLL_BACKING_STORE_HINT 64
 #define EVE_EPOLL_ARRAY_SIZE 64
 
-void ev_free(struct ev *ev)
+void ev_destroy(struct ev *ev)
 {
 	eve_assert(ev);
+	eve_assert(ev->fd != -1);
 
 	/* close epoll descriptor */
 	close(ev->fd);
 
+	/* clear potential secure data */
 	memset(ev, 0, sizeof(struct ev));
 	free(ev);
 }
 
-struct ev *ev_new(void)
+static inline int ev_new_flags_convert(int flags)
+{
+	if (flags == 0)
+		return 0;
+
+	if (flags == EV_CLOEXEC)
+		return EPOLL_CLOEXEC;
+
+	return -EINVAL;
+}
+
+struct ev *ev_new(int flags)
 {
 	struct ev *ev;
+	int flags_epoll;
+
+	flags_epoll = ev_new_flags_convert(flags);
+	if (flags_epoll < 0) {
+		return NULL;
+	}
 
 	ev = struct_ev_new_internal();
 	if (!ev)
 		return NULL;
 
-	ev->fd = epoll_create(EVE_EPOLL_BACKING_STORE_HINT);
+	ev->fd = epoll_create1(flags_epoll);
 	if (ev->fd < 0) {
-		ev_free(ev);
+		free(ev);
 		return NULL;
 	}
 
-	ev->size        = 0;
+	ev->size = 0;
 	ev->break_loop = 0;
 
 	return ev;
@@ -257,7 +317,7 @@ static int ev_arm_timerfd_internal(struct ev_entry *ev_entry)
 
 	ret = clock_gettime(CLOCK_REALTIME, &now);
 	if (ret < 0) {
-		return EV_FAILURE;
+		return -EINVAL;
 	}
 
 	new_value.it_value.tv_sec  = now.tv_sec  + ev_entry->timespec.tv_sec;
@@ -275,20 +335,20 @@ static int ev_arm_timerfd_internal(struct ev_entry *ev_entry)
 
 	fd = timerfd_create(CLOCK_REALTIME, 0);
 	if (fd < 0) {
-		return EV_FAILURE;
+		return -EINVAL;
 	}
 
 	ret = timerfd_settime(fd, TFD_TIMER_ABSTIME, &new_value, NULL);
 	if (ret < 0) {
 		close(fd);
-		return EV_FAILURE;
+		return -EINVAL;
 	}
 
 	ev_entry_data_epoll->flags = EPOLLIN | EPOLLPRI | EPOLLERR | EPOLLHUP;
 
 	ev_entry->fd = fd;
 
-	return EV_SUCCESS;
+	return 0;
 }
 
 int ev_add(struct ev *ev, struct ev_entry *ev_entry)
@@ -305,8 +365,8 @@ int ev_add(struct ev *ev, struct ev_entry *ev_entry)
 	memset(&epoll_ev, 0, sizeof(struct epoll_event));
 
 	if ((ev_entry->type == EV_TIMEOUT) &&
-			(ev_arm_timerfd_internal(ev_entry) == EV_FAILURE)) {
-		return EV_FAILURE;
+			(ev_arm_timerfd_internal(ev_entry) != 0)) {
+		return -EINVAL;
 	}
 
 	/* FIXME: the mapping must be a one to one mapping */
@@ -315,12 +375,12 @@ int ev_add(struct ev *ev, struct ev_entry *ev_entry)
 
 	ret = epoll_ctl(ev->fd, EPOLL_CTL_ADD, ev_entry->fd, &epoll_ev);
 	if (ret < 0) {
-		return EV_FAILURE;
+		return -EINVAL;
 	}
 
 	ev->size++;
 
-	return EV_SUCCESS;
+	return 0;
 }
 
 int ev_del(struct ev *ev, struct ev_entry *ev_entry)
@@ -335,12 +395,12 @@ int ev_del(struct ev *ev, struct ev_entry *ev_entry)
 
 	ret = epoll_ctl(ev->fd, EPOLL_CTL_DEL, ev_entry->fd, &epoll_ev);
 	if (ret < 0) {
-		return EV_FAILURE;
+		return -EINVAL;
 	}
 
 	ev->size--;
 
-	return EV_SUCCESS;
+	return 0;
 }
 
 int ev_timer_cancel(struct ev *ev, struct ev_entry *ev_entry)
@@ -351,14 +411,14 @@ int ev_timer_cancel(struct ev *ev, struct ev_entry *ev_entry)
 	eve_assert(ev_entry->type == EV_TIMEOUT);
 
 	ret = ev_del(ev, ev_entry);
-	if (ret != EV_SUCCESS)
-		return EV_FAILURE;
+	if (ret != 0)
+		return -EINVAL;
 
 	/* close the timer fd specific descriptor */
 	close(ev_entry->fd);
 	ev_entry_free(ev_entry);
 
-	return EV_SUCCESS;
+	return 0;
 }
 
 static inline void ev_process_call_epoll_timeout(
@@ -393,17 +453,17 @@ static inline void ev_process_call_internal(
 	eve_assert(ev_entry);
 
 	switch (ev_entry->type) {
-		case EV_READ:
-		case EV_WRITE:
-			ev_entry->fd_cb(ev_entry->fd, ev_entry->type, ev_entry->data);
-			return;
-			break;
-		case EV_TIMEOUT:
-			ev_process_call_epoll_timeout(ev, ev_entry);
-			break;
-		default:
-			return;
-			break;
+	case EV_READ:
+	case EV_WRITE:
+		ev_entry->fd_cb(ev_entry->fd, ev_entry->type, ev_entry->data);
+		return;
+		break;
+	case EV_TIMEOUT:
+		ev_process_call_epoll_timeout(ev, ev_entry);
+		break;
+	default:
+		return;
+		break;
 	}
 	return;
 }
@@ -420,7 +480,7 @@ int ev_loop(struct ev *ev, uint32_t flags)
 	while (ev->size > 0) {
 		nfds = epoll_wait(ev->fd, events, EVE_EPOLL_ARRAY_SIZE, -1);
 		if (nfds < 0) {
-			return EV_FAILURE;
+			return -EINVAL;
 		}
 
 		/* multiplex and call the registerd callback handler */
@@ -433,6 +493,6 @@ int ev_loop(struct ev *ev, uint32_t flags)
 			break;
 	}
 
-	return EV_SUCCESS;
+	return 0;
 }
 

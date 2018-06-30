@@ -16,7 +16,7 @@ CFLAGS := -Wall -Wextra -Wunused -pipe -Wwrite-strings -Wsign-compare \
 
 EXTRA_CFLAGS := -DHAVE_EPOLL -DLIBEVE_DEBUG
 
-all: test bench $(LIBRARY)
+all: $(LIBRARY) test
 
 %.o : %.c
 	$(CC) -c $(CFLAGS) $(EXTRA_CFLAGS) $(CPPFLAGS) $< -o $@
@@ -27,9 +27,6 @@ $(LIBRARY): $(OBJ)
 test: $(OBJ) test.c
 	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(LIBS) -o test $(OBJ) test.c
 
-bench: $(OBJ) bench.c
-	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(LIBS) -o bench $(OBJ) bench.c
-
 clean:
-	-rm -f $(OBJ) test bench
+	-rm -f $(OBJ) test
 
