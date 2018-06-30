@@ -10,9 +10,11 @@
 #include <assert.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <signal.h>
 
 #include <sys/epoll.h>
 #include <sys/timerfd.h>
+#include <sys/signalfd.h>
 
 
 #ifndef rdtscll
@@ -105,6 +107,7 @@ struct ev_entry {
 	union {
 		void (*fd_cb)(int, int, void *);
 		void (*timer_cb)(void *);
+		void (*signal_cb)(unsigned, void *);
 	};
 
 	/* user provided pointer to data */
@@ -173,7 +176,11 @@ int ev_set_non_blocking(int fd) {
 
 
 struct ev_entry_data_epoll {
+	/* std fd handling data */
 	uint32_t flags;
+	union {
+		sigset_t signal_mask;
+	};
 };
 
 
@@ -334,7 +341,14 @@ struct ev_entry *ev_timer_periodic_new(struct timespec *timespec,
 static void ev_entry_timer_free(struct ev_entry *ev_entry)
 {
 	eve_assert(ev_entry);
-	eve_assert(ev_entry->type == EV_TIMEOUT_ONESHOT);
+
+	close(ev_entry->fd);
+}
+
+
+static void ev_entry_signal_free(struct ev_entry *ev_entry)
+{
+	eve_assert(ev_entry);
 
 	close(ev_entry->fd);
 }
@@ -349,6 +363,9 @@ void ev_entry_free(struct ev_entry *ev_entry)
 	case EV_TIMEOUT_ONESHOT:
 	case EV_TIMEOUT_PERIODIC:
 		ev_entry_timer_free(ev_entry);
+		break;
+	case EV_SIGNAL:
+		ev_entry_signal_free(ev_entry);
 		break;
 	default:
 		// other events have no special cleaning
@@ -451,6 +468,65 @@ static int ev_arm_timerfd_periodic(struct ev_entry *ev_entry)
 }
 
 
+int ev_signal_catch(struct ev_entry *ev_entry, int signal_no)
+{
+	struct ev_entry_data_epoll *ev_entry_data_epoll = ev_entry->priv_data;
+
+	sigaddset(&ev_entry_data_epoll->signal_mask, signal_no);
+
+	return 0;
+}
+
+
+static int ev_arm_signal(struct ev_entry *ev_entry)
+{
+	int ret, fd;
+	struct ev_entry_data_epoll *ev_entry_data_epoll = ev_entry->priv_data;
+
+	ret = sigprocmask(SIG_BLOCK, &ev_entry_data_epoll->signal_mask, NULL);
+	if (ret < 0) {
+		pr_debug("sigprocmask");
+		return -EINVAL;
+	}
+
+	fd = signalfd(-1, &ev_entry_data_epoll->signal_mask, 0);
+	if (fd < 0) {
+		pr_debug("signalfd");
+		return -EINVAL;
+	}
+
+	ret = ev_set_non_blocking(fd);
+	if (ret < 0) {
+		close(fd);
+		return -EINVAL;
+	}
+
+	ev_entry_data_epoll->flags = EPOLLIN | EPOLLPRI | EPOLLERR | EPOLLHUP;
+	ev_entry->fd = fd;
+
+	return 0;
+}
+
+
+struct ev_entry *ev_signal_new(void (*cb)(unsigned, void *), void *data)
+{
+	struct ev_entry *ev_entry;
+	struct ev_entry_data_epoll *ev_entry_data_epoll;
+
+	ev_entry = ev_entry_new_epoll_internal();
+	if (!ev_entry)
+		return NULL;
+
+	ev_entry->type = EV_SIGNAL;
+	ev_entry->signal_cb = cb;
+	ev_entry->data = data;
+
+	ev_entry_data_epoll = ev_entry->priv_data;
+	sigemptyset(&ev_entry_data_epoll->signal_mask);
+
+	return ev_entry;
+}
+
 
 int ev_add(struct ev *ev, struct ev_entry *ev_entry)
 {
@@ -473,6 +549,11 @@ int ev_add(struct ev *ev, struct ev_entry *ev_entry)
 		break;
 	case EV_TIMEOUT_PERIODIC:
 		ret = ev_arm_timerfd_periodic(ev_entry);
+		if (ret != 0)
+			return -EINVAL;
+		break;
+	case EV_SIGNAL:
+		ret = ev_arm_signal(ev_entry);
 		if (ret != 0)
 			return -EINVAL;
 		break;
@@ -579,6 +660,32 @@ static inline void ev_process_timer_periodic(struct ev_entry *ev_entry)
 }
 
 
+static inline void ev_process_signal(struct ev_entry *ev_entry)
+{
+	ssize_t ret;
+	struct signalfd_siginfo sigsiginfo;
+
+	/* and now: cleanup timer specific data and
+	 * finally all event specific data */
+	ret = read(ev_entry->fd, &sigsiginfo, sizeof(sigsiginfo));
+	if (ret < 0) {
+		// FIXME: ok the complete error handling is some
+		// what strange here. I mean the callback is called
+		// and this is all we need. There is no way to inform
+		// that something bad happens later where the user
+		// cannot do anything
+		eve_assert(0);
+		return;
+	}
+	if (ret != sizeof(sigsiginfo)) {
+		pr_debug("reading signalfd too short");
+		return;
+	}
+
+	ev_entry->signal_cb(sigsiginfo.ssi_signo, ev_entry->data);
+}
+
+
 static inline void ev_process_call_internal(
 		struct ev *ev, struct ev_entry *ev_entry)
 {
@@ -597,6 +704,9 @@ static inline void ev_process_call_internal(
 		break;
 	case EV_TIMEOUT_PERIODIC:
 		ev_process_timer_periodic(ev_entry);
+		break;
+	case EV_SIGNAL:
+		ev_process_signal(ev_entry);
 		break;
 	default:
 		return;

@@ -25,6 +25,7 @@ CFLAGS += -fstack-protector-strong -grecord-gcc-switches
 CFLAGS += -Wl,-z,defs -Wl,-z,relro -fexceptions
 CFLAGS += -ftrapv
 CFLAGS += -std=gnu11
+CFLAGS += -Wno-unused-function
 
 CFLAGS += -ggdb3 -Werror
 

@@ -10,6 +10,7 @@
 #define	EV_WRITE            (1 << 1)
 #define	EV_TIMEOUT_ONESHOT  (1 << 2)
 #define	EV_TIMEOUT_PERIODIC (1 << 3)
+#define	EV_SIGNAL           (1 << 4)
 
 #define EV_CLOEXEC (1 << 0)
 
@@ -119,9 +120,9 @@ struct ev_entry *ev_timer_periodic_new(struct timespec *, void (*cb)(void *), vo
  * manually somewhere else in the program. Both signal handling routines
  * will conflict.
  */
-//struct ev_entry *ev_signal_new(struct signal_mask, );
+struct ev_entry *ev_signal_new(void (*cb)(unsigned, void *), void *);
 
-//int ev_signal_add(int signo);
+int ev_signal_catch(struct ev_entry *, int signo);
 
 
 

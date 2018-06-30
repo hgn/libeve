@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <signal.h>
 
 #include "ev.h"
 
@@ -113,19 +114,65 @@ static int do_cancel_test(struct ev *ev)
 	return 1;
 }
 
-int main(void)
+static void test_timer(void)
 {
 	struct ev *ev;
 
 	ev = ev_new(0);
 	if (!ev) {
 		fprintf(stderr, "Cannot create event handler\n");
-		return EXIT_FAILURE;
+		return;
 	}
 
 	do_cancel_test(ev);
 
 	ev_destroy(ev);
+
+}
+
+static void cb_signal(unsigned signal_no, void *data)
+{
+	(void) data;
+
+	fprintf(stderr, "caught signal %d\n", signal_no);
+}
+
+
+static void test_signal(void)
+{
+	struct ev *ev;
+	int flags = 0, ret;
+	struct ev_entry *ev_entry;
+
+	ev = ev_new(0);
+	if (!ev) {
+		fprintf(stderr, "Cannot create event handler\n");
+		return;
+	}
+
+	ev_entry = ev_signal_new(cb_signal, ev);
+	if (!ev_entry) {
+		fprintf(stderr, "failed to call ev_signal_new\n");
+		abort();
+	}
+	ev_signal_catch(ev_entry, SIGHUP);
+	ev_signal_catch(ev_entry, SIGINT);
+	ret = ev_add(ev, ev_entry);
+	if (ret != 0) {
+		fprintf(stderr, "Cannot add entry to event handler\n");
+		exit(EXIT_FAILURE);
+	}
+
+	ev_loop(ev, flags);
+
+	ev_destroy(ev);
+}
+
+
+int main(void)
+{
+	test_signal();
+	//test_timer();
 
 	return EXIT_SUCCESS;
 
