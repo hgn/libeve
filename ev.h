@@ -84,10 +84,27 @@ void ev_entry_free(struct ev_entry *);
 
 struct ev_entry *ev_timer_oneshot_new(struct timespec *, void (*cb)(void *), void *);
 
-/* struct ev_event * is freed by ev_timer_cancel - user provided callbacks
- * and data not - sure. So do not dereference ev_entry afterwards */
-int ev_timer_oneshot_cancel(struct ev *, struct ev_entry *);
 
+/*
+ * struct ev_event * is freed by ev_timer_cancel - user provided callbacks
+ * and data not - sure. So do not dereference ev_entry afterwards
+ *
+ * Make sure that ever you cancel the timer you call ev_entry_free()
+ *
+ */
+int ev_timer_cancel(struct ev *, struct ev_entry *);
+
+/**
+ * ev_entries - return number of active event entries
+ * @ev: pointer instance of ev object
+ *
+ * This function returns the number of active event
+ * entries, like timers, descriptors or signals. With
+ * each ev_event_add the counter is incremented and vice
+ * versa for delete operations.
+ *
+ * This function cannot fail.
+ */
 struct ev_entry *ev_timer_periodic_new(struct timespec *, void (*cb)(void *), void *);
 
 

@@ -47,7 +47,7 @@ static void cancel_timer_cb(void *data)
 	int ret;
 	struct ev_wrapper *ev_wrapper = data;
 
-	ret = ev_timer_oneshot_cancel(ev_wrapper->ev, ev_wrapper->ev_entry);
+	ret = ev_timer_cancel(ev_wrapper->ev, ev_wrapper->ev_entry);
 	if (ret != 0) {
 		fprintf(stderr, "failed to cancel timer\n");
 		exit(EXIT_FAILURE);

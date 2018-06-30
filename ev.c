@@ -517,13 +517,12 @@ int ev_del(struct ev *ev, struct ev_entry *ev_entry)
 }
 
 
-int ev_timer_oneshot_cancel(struct ev *ev, struct ev_entry *ev_entry)
+int ev_timer_cancel(struct ev *ev, struct ev_entry *ev_entry)
 {
 	int ret;
 
 	eve_assert(ev_entry);
-	eve_assert(ev_entry->type == EV_TIMEOUT_ONESHOT ||
-		   ev_entry->type == EV_TIMEOUT_PERIODIC);
+	eve_assert(ev_entry->type == EV_TIMEOUT_ONESHOT);
 
 	ret = ev_del(ev, ev_entry);
 	if (ret != 0)
@@ -533,25 +532,50 @@ int ev_timer_oneshot_cancel(struct ev *ev, struct ev_entry *ev_entry)
 }
 
 
-static inline void ev_process_call_epoll_timeout(
-		struct ev *ev, struct ev_entry *ev_entry)
+static inline void ev_process_timer_oneshot(struct ev *ev,
+		                            struct ev_entry *ev_entry)
 {
 	ssize_t ret;
-	int64_t time_buf;
+	unsigned long long missed;
 
 	/* first of all - call user callback */
 	ev_entry->timer_cb(ev_entry->data);
 
 	/* and now: cleanup timer specific data and
 	 * finally all event specific data */
-	ret = read(ev_entry->fd, &time_buf, sizeof(int64_t));
-	if ((ret < (ssize_t)sizeof(int64_t)) ||
-			(time_buf > 1)) {
-		/* failure - should not happens: kernel bug */
+	ret = read(ev_entry->fd, &missed, sizeof(missed));
+	if (ret < 0) {
+		// FIXME: ok the complete error handling is some
+		// what strange here. I mean the callback is called
+		// and this is all we need. There is no way to inform
+		// that something bad happens later where the user
+		// cannot do anything
 		eve_assert(0);
 	}
 
 	ev_del(ev, ev_entry);
+}
+
+
+static inline void ev_process_timer_periodic(struct ev_entry *ev_entry)
+{
+	ssize_t ret;
+	unsigned long long missed;
+
+	/* first of all - call user callback */
+	ev_entry->timer_cb(ev_entry->data);
+
+	/* and now: cleanup timer specific data and
+	 * finally all event specific data */
+	ret = read(ev_entry->fd, &missed, sizeof(missed));
+	if (ret < 0) {
+		// FIXME: ok the complete error handling is some
+		// what strange here. I mean the callback is called
+		// and this is all we need. There is no way to inform
+		// that something bad happens later where the user
+		// cannot do anything
+		eve_assert(0);
+	}
 }
 
 
@@ -569,7 +593,10 @@ static inline void ev_process_call_internal(
 		return;
 		break;
 	case EV_TIMEOUT_ONESHOT:
-		ev_process_call_epoll_timeout(ev, ev_entry);
+		ev_process_timer_oneshot(ev, ev_entry);
+		break;
+	case EV_TIMEOUT_PERIODIC:
+		ev_process_timer_periodic(ev_entry);
 		break;
 	default:
 		return;
