@@ -18,6 +18,8 @@ CFLAGS := -Wall -Wextra -Wunused -pipe -Wwrite-strings -Wsign-compare \
 
 EXTRA_CFLAGS := -DHAVE_EPOLL -DLIBEVE_DEBUG
 
+.PHONY: all clean cscope
+
 all: $(LIBRARY) test
 
 %.o : %.c
@@ -29,6 +31,11 @@ $(LIBRARY): $(OBJ)
 test: $(OBJ) test.c
 	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(LIBS) -o test $(OBJ) test.c
 
+cscope:
+	find ${CURDIR} -name "*.[chsS]" > cscope.files
+	cscope -b -q
+
 clean:
-	-rm -f $(OBJ) test
+	rm -f $(OBJ) test
+	rm -f ${CURDIR}/cscope.*
 

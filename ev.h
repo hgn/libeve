@@ -30,6 +30,10 @@ struct ev_entry;
  */
 struct ev *ev_new(int flags);
 
+int ev_add(struct ev *, struct ev_entry *);
+int ev_loop(struct ev *, uint32_t);
+int ev_run_out(struct ev *);
+
 
 /**
  * ev_destroy - deallocate ev structure
@@ -43,10 +47,22 @@ struct ev *ev_new(int flags);
  * ev_event data structures, close file descriptors, etc. This cannot be done
  * by ev_destroy().
  *
- * This function cannot fail and thus return no return status
+ * This function cannot fail and thus return no return status.
  */
 void ev_destroy(struct ev *);
-unsigned int ev_size(struct ev *e);
+
+/**
+ * ev_entries - return number of active event entries
+ * @ev: pointer instance of ev object
+ *
+ * This function returns the number of active event
+ * entries, like timers, descriptors or signals. With
+ * each ev_event_add the counter is incremented and vice
+ * versa for delete operations.
+ *
+ * This function cannot fail.
+ */
+unsigned long long ev_entries(struct ev *e);
 
 
 /* ev, auxiliary functions */
@@ -60,13 +76,28 @@ int ev_del(struct ev *, struct ev_entry *);
 void ev_entry_free(struct ev_entry *);
 
 struct ev_entry *ev_timer_new(struct timespec *, void (*cb)(void *), void *);
+
 /* struct ev_event * is freed by ev_timer_cancel - user provided callbacks
  * and data not - sure. So do not dereference ev_entry afterwards */
 int ev_timer_cancel(struct ev *, struct ev_entry *);
 
-int ev_add(struct ev *, struct ev_entry *);
-int ev_loop(struct ev *, uint32_t);
-int ev_run_out(struct ev *);
+
+/*
+ * Signal handling is a little bit different, for files & sockets
+ * as well as timers there are unique, non-shared resourches. Signals
+ * on the other hand are different: there is a global, per process mask
+ *
+ * signal new clears and come with a fresh mask
+ *
+ * Don't use the signal handling code if you handle signal handler
+ * manually somewhere else in the program. Both signal handling routines
+ * will conflict.
+ */
+struct ev_entry *ev_signal_new(struct signal_mask, );
+
+int ev_signal_add(int signo);
+
+
 
 /* auxiliary functions */
 void ev_entry_set_data(struct ev_entry *, void *);

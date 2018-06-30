@@ -80,7 +80,7 @@ do {                                                      \
 struct ev {
 	int fd;
 	int break_loop;
-	unsigned int size;
+	unsigned long long entries;
 
 	/* implementation specific data, e.g. select timer handling
 	 * will use this to store the rbtree */
@@ -110,8 +110,8 @@ struct ev_entry {
 	void *priv_data;
 };
 
-unsigned int ev_size(struct ev *e) {
-	return e->size;
+unsigned int ev_entries(struct ev *e) {
+	return e->entries;
 }
 
 int ev_fd(struct ev *e) {
