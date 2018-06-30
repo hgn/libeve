@@ -23,7 +23,7 @@ void timer_cd(void *data)
 	if (i++ >= ITERATIO_MAX)
 		return;
 
-	ev_e = ev_timer_new(&timespec, timer_cd, ev);
+	ev_e = ev_timer_oneshot_new(&timespec, timer_cd, ev);
 	if (!ev_e) {
 		fprintf(stderr, "failed to create a ev_entry object\n");
 		exit(666);
@@ -47,11 +47,13 @@ static void cancel_timer_cb(void *data)
 	int ret;
 	struct ev_wrapper *ev_wrapper = data;
 
-	ret = ev_timer_cancel(ev_wrapper->ev, ev_wrapper->ev_entry);
+	ret = ev_timer_oneshot_cancel(ev_wrapper->ev, ev_wrapper->ev_entry);
 	if (ret != 0) {
 		fprintf(stderr, "failed to cancel timer\n");
 		exit(EXIT_FAILURE);
 	}
+
+	ev_entry_free(ev_wrapper->ev_entry);
 
 	return;
 }
@@ -68,7 +70,7 @@ static int do_cancel_test(struct ev *ev)
 
 	fprintf(stderr, "run timer cancel test ...");
 
-	eve1 = ev_timer_new((void *)&timespec1, (void *)timer_cd, (void *)ev);
+	eve1 = ev_timer_oneshot_new((void *)&timespec1, (void *)timer_cd, (void *)ev);
 	if (!eve1) {
 		fprintf(stderr, "Failed to create a ev_entry object\n");
 		exit(EXIT_FAILURE);
@@ -87,10 +89,10 @@ static int do_cancel_test(struct ev *ev)
 		exit(EXIT_FAILURE);
 	}
 
-	ev_wrapper->ev       = ev;
+	ev_wrapper->ev = ev;
 	ev_wrapper->ev_entry = eve1;
 
-	eve2 = ev_timer_new((void *)&timespec2, (void *)cancel_timer_cb, (void *)ev_wrapper);
+	eve2 = ev_timer_oneshot_new((void *)&timespec2, (void *)cancel_timer_cb, (void *)ev_wrapper);
 	if (!eve2) {
 		fprintf(stderr, "Failed to create a ev_entry object\n");
 		exit(EXIT_FAILURE);

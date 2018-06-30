@@ -6,9 +6,10 @@
 #include <sys/time.h>
 #include <inttypes.h>
 
-#define	EV_READ    (1 << 0)
-#define	EV_WRITE   (1 << 1)
-#define	EV_TIMEOUT (1 << 2)
+#define	EV_READ             (1 << 0)
+#define	EV_WRITE            (1 << 1)
+#define	EV_TIMEOUT_ONESHOT  (1 << 2)
+#define	EV_TIMEOUT_PERIODIC (1 << 3)
 
 #define EV_CLOEXEC (1 << 0)
 
@@ -30,6 +31,11 @@ struct ev_entry;
  */
 struct ev *ev_new(int flags);
 
+/**
+ *
+ * In the case of an error an negative errno value is returned.
+ * It is up to the caller to free ev_entry data structure.
+ */
 int ev_add(struct ev *, struct ev_entry *);
 int ev_loop(struct ev *, int);
 int ev_run_out(struct ev *);
@@ -75,11 +81,14 @@ struct ev_entry *ev_entry_new(int, int, void (*cb)(int, int, void *), void *);
 int ev_del(struct ev *, struct ev_entry *);
 void ev_entry_free(struct ev_entry *);
 
-struct ev_entry *ev_timer_new(struct timespec *, void (*cb)(void *), void *);
+
+struct ev_entry *ev_timer_oneshot_new(struct timespec *, void (*cb)(void *), void *);
 
 /* struct ev_event * is freed by ev_timer_cancel - user provided callbacks
  * and data not - sure. So do not dereference ev_entry afterwards */
-int ev_timer_cancel(struct ev *, struct ev_entry *);
+int ev_timer_oneshot_cancel(struct ev *, struct ev_entry *);
+
+struct ev_entry *ev_timer_periodic_new(struct timespec *, void (*cb)(void *), void *);
 
 
 /*

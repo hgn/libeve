@@ -2,9 +2,17 @@
 
 #include "ev.h"
 
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+#include <time.h>
+#include <assert.h>
+#include <fcntl.h>
+#include <errno.h>
+
 #include <sys/epoll.h>
 #include <sys/timerfd.h>
-#include <time.h>
 
 
 #ifndef rdtscll
@@ -38,15 +46,6 @@
 #define	eve_assert(x)
 #endif
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <unistd.h>
-#include <time.h>
-#include <assert.h>
-#include <fcntl.h>
-#include <errno.h>
-
 /* FIXME: check for wrong subtraction/addition operation of struct timespec */
 
 /* cmp: <, <=, >, >= or == */
@@ -78,6 +77,10 @@ do {                                                      \
 	}                                                 \
 } while (0)
 
+
+#define EVE_EPOLL_ARRAY_SIZE 64
+
+
 struct ev {
 	int fd;
 	int break_loop;
@@ -88,15 +91,15 @@ struct ev {
 	void *priv_data;
 };
 
-struct ev_entry {
 
+struct ev_entry {
 	/* monitored FD if type is EV_READ or EV_WRITE */
 	int fd;
 
-	/* EV_READ, EV_WRITE or EV_TIMEOUT */
+	/* EV_READ, EV_WRITE or EV_TIMEOUT_ONESHOT */
 	int type;
 
-	/* timeout val if type is EV_TIMEOUT */
+	/* timeout val if type is EV_TIMEOUT_ONESHOT */
 	struct timespec timespec;
 
 	union {
@@ -111,9 +114,11 @@ struct ev_entry {
 	void *priv_data;
 };
 
+
 unsigned long long ev_entries(struct ev *e) {
 	return e->entries;
 }
+
 
 int ev_fd(struct ev *e) {
 	return e->fd;
@@ -133,10 +138,13 @@ static struct ev *struct_ev_new_internal(void)
 	return ev;
 }
 
-inline void ev_entry_set_data(struct ev_entry *entry, void *data)
+
+inline void ev_entry_set_data(struct ev_entry *entry,
+			      void *data)
 {
 	entry->data = data;
 }
+
 
 int ev_run_out(struct ev *ev)
 {
@@ -144,6 +152,7 @@ int ev_run_out(struct ev *ev)
 	ev->break_loop = 1;
 	return 0;
 }
+
 
 /* similar for all implementations, at least
  * under Linux. Solaris, AIX, etc. differs and need
@@ -167,7 +176,6 @@ struct ev_entry_data_epoll {
 	uint32_t flags;
 };
 
-#define EVE_EPOLL_ARRAY_SIZE 64
 
 void ev_destroy(struct ev *ev)
 {
@@ -182,6 +190,7 @@ void ev_destroy(struct ev *ev)
 	free(ev);
 }
 
+
 static inline int ev_new_flags_convert(int flags)
 {
 	if (flags == 0)
@@ -192,6 +201,7 @@ static inline int ev_new_flags_convert(int flags)
 
 	return -EINVAL;
 }
+
 
 struct ev *ev_new(int flags)
 {
@@ -219,6 +229,7 @@ struct ev *ev_new(int flags)
 	return ev;
 }
 
+
 struct ev_entry *ev_entry_new_epoll_internal(void)
 {
 	struct ev_entry *ev_entry;
@@ -239,6 +250,7 @@ struct ev_entry *ev_entry_new_epoll_internal(void)
 
 	return ev_entry;
 }
+
 
 struct ev_entry *ev_entry_new(int fd, int what,
 		void (*cb)(int, int, void *), void *data)
@@ -276,7 +288,8 @@ struct ev_entry *ev_entry_new(int fd, int what,
 	return ev_entry;
 }
 
-struct ev_entry *ev_timer_new(struct timespec *timespec,
+
+struct ev_entry *ev_timer_oneshot_new(struct timespec *timespec,
 		void (*cb)(void *), void *data)
 {
 	struct ev_entry *ev_entry;
@@ -287,7 +300,7 @@ struct ev_entry *ev_timer_new(struct timespec *timespec,
 	if (!ev_entry)
 		return NULL;
 
-	ev_entry->type     = EV_TIMEOUT;
+	ev_entry->type     = EV_TIMEOUT_ONESHOT;
 	ev_entry->timer_cb = cb;
 	ev_entry->data     = data;
 
@@ -296,17 +309,60 @@ struct ev_entry *ev_timer_new(struct timespec *timespec,
 	return ev_entry;
 }
 
+
+struct ev_entry *ev_timer_periodic_new(struct timespec *timespec,
+		void (*cb)(void *), void *data)
+{
+	struct ev_entry *ev_entry;
+
+	eve_assert(timespec && cb);
+
+	ev_entry = ev_entry_new_epoll_internal();
+	if (!ev_entry)
+		return NULL;
+
+	ev_entry->type     = EV_TIMEOUT_PERIODIC;
+	ev_entry->timer_cb = cb;
+	ev_entry->data     = data;
+
+	memcpy(&ev_entry->timespec, timespec, sizeof(struct timespec));
+
+	return ev_entry;
+}
+
+
+static void ev_entry_timer_free(struct ev_entry *ev_entry)
+{
+	eve_assert(ev_entry);
+	eve_assert(ev_entry->type == EV_TIMEOUT_ONESHOT);
+
+	close(ev_entry->fd);
+}
+
+
 void ev_entry_free(struct ev_entry *ev_entry)
 {
 	eve_assert(ev_entry);
 	eve_assert(ev_entry->priv_data);
+
+	switch (ev_entry->type) {
+	case EV_TIMEOUT_ONESHOT:
+	case EV_TIMEOUT_PERIODIC:
+		ev_entry_timer_free(ev_entry);
+		break;
+	default:
+		// other events have no special cleaning
+		// functions. do nothing
+		break;
+	}
 
 	free(ev_entry->priv_data);
 	memset(ev_entry, 0, sizeof(struct ev_entry));
 	free(ev_entry);
 }
 
-static int ev_arm_timerfd_internal(struct ev_entry *ev_entry)
+
+static int ev_arm_timerfd_oneshot(struct ev_entry *ev_entry)
 {
 	int ret, fd;
 	struct timespec now;
@@ -315,7 +371,7 @@ static int ev_arm_timerfd_internal(struct ev_entry *ev_entry)
 
 	memset(&new_value, 0, sizeof(struct itimerspec));
 
-	ret = clock_gettime(CLOCK_REALTIME, &now);
+	ret = clock_gettime(CLOCK_MONOTONIC, &now);
 	if (ret < 0) {
 		return -EINVAL;
 	}
@@ -333,12 +389,18 @@ static int ev_arm_timerfd_internal(struct ev_entry *ev_entry)
 	new_value.it_interval.tv_sec  = 0;
 	new_value.it_interval.tv_nsec = 0;
 
-	fd = timerfd_create(CLOCK_REALTIME, 0);
+	fd = timerfd_create(CLOCK_MONOTONIC, 0);
 	if (fd < 0) {
 		return -EINVAL;
 	}
 
 	ret = timerfd_settime(fd, TFD_TIMER_ABSTIME, &new_value, NULL);
+	if (ret < 0) {
+		close(fd);
+		return -EINVAL;
+	}
+
+	ret = ev_set_non_blocking(fd);
 	if (ret < 0) {
 		close(fd);
 		return -EINVAL;
@@ -350,6 +412,45 @@ static int ev_arm_timerfd_internal(struct ev_entry *ev_entry)
 
 	return 0;
 }
+
+
+static int ev_arm_timerfd_periodic(struct ev_entry *ev_entry)
+{
+	int ret, fd;
+	struct itimerspec new_value;
+	struct ev_entry_data_epoll *ev_entry_data_epoll = ev_entry->priv_data;
+
+	new_value.it_value.tv_sec  = ev_entry->timespec.tv_sec;
+	new_value.it_value.tv_nsec = ev_entry->timespec.tv_nsec;
+
+	new_value.it_interval.tv_sec  = ev_entry->timespec.tv_sec;
+	new_value.it_interval.tv_nsec = ev_entry->timespec.tv_nsec;
+
+	fd = timerfd_create(CLOCK_MONOTONIC, 0);
+	if (fd < 0) {
+		return -EINVAL;
+	}
+
+	ret = timerfd_settime(fd, 0, &new_value, NULL);
+	if (ret < 0) {
+		close(fd);
+		return -EINVAL;
+	}
+
+	ret = ev_set_non_blocking(fd);
+	if (ret < 0) {
+		close(fd);
+		return -EINVAL;
+	}
+
+	ev_entry_data_epoll->flags = EPOLLIN | EPOLLPRI | EPOLLERR | EPOLLHUP;
+
+	ev_entry->fd = fd;
+
+	return 0;
+}
+
+
 
 int ev_add(struct ev *ev, struct ev_entry *ev_entry)
 {
@@ -364,9 +465,20 @@ int ev_add(struct ev *ev, struct ev_entry *ev_entry)
 
 	memset(&epoll_ev, 0, sizeof(struct epoll_event));
 
-	if ((ev_entry->type == EV_TIMEOUT) &&
-			(ev_arm_timerfd_internal(ev_entry) != 0)) {
-		return -EINVAL;
+	switch (ev_entry->type) {
+	case EV_TIMEOUT_ONESHOT:
+		ret = ev_arm_timerfd_oneshot(ev_entry);
+		if (ret != 0)
+			return -EINVAL;
+		break;
+	case EV_TIMEOUT_PERIODIC:
+		ret = ev_arm_timerfd_periodic(ev_entry);
+		if (ret != 0)
+			return -EINVAL;
+		break;
+	default:
+		// no special treatment of other entries
+		break;
 	}
 
 	/* FIXME: the mapping must be a one to one mapping */
@@ -382,6 +494,7 @@ int ev_add(struct ev *ev, struct ev_entry *ev_entry)
 
 	return 0;
 }
+
 
 int ev_del(struct ev *ev, struct ev_entry *ev_entry)
 {
@@ -403,23 +516,22 @@ int ev_del(struct ev *ev, struct ev_entry *ev_entry)
 	return 0;
 }
 
-int ev_timer_cancel(struct ev *ev, struct ev_entry *ev_entry)
+
+int ev_timer_oneshot_cancel(struct ev *ev, struct ev_entry *ev_entry)
 {
 	int ret;
 
 	eve_assert(ev_entry);
-	eve_assert(ev_entry->type == EV_TIMEOUT);
+	eve_assert(ev_entry->type == EV_TIMEOUT_ONESHOT ||
+		   ev_entry->type == EV_TIMEOUT_PERIODIC);
 
 	ret = ev_del(ev, ev_entry);
 	if (ret != 0)
 		return -EINVAL;
 
-	/* close the timer fd specific descriptor */
-	close(ev_entry->fd);
-	ev_entry_free(ev_entry);
-
 	return 0;
 }
+
 
 static inline void ev_process_call_epoll_timeout(
 		struct ev *ev, struct ev_entry *ev_entry)
@@ -440,8 +552,6 @@ static inline void ev_process_call_epoll_timeout(
 	}
 
 	ev_del(ev, ev_entry);
-	close(ev_entry->fd);
-	ev_entry_free(ev_entry);
 }
 
 
@@ -458,7 +568,7 @@ static inline void ev_process_call_internal(
 		ev_entry->fd_cb(ev_entry->fd, ev_entry->type, ev_entry->data);
 		return;
 		break;
-	case EV_TIMEOUT:
+	case EV_TIMEOUT_ONESHOT:
 		ev_process_call_epoll_timeout(ev, ev_entry);
 		break;
 	default:
@@ -467,6 +577,7 @@ static inline void ev_process_call_internal(
 	}
 	return;
 }
+
 
 int ev_loop(struct ev *ev, int flags)
 {
