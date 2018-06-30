@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: The Unlicense
+
 OBJ := ev.o
 LIBRARY := ev.a
 

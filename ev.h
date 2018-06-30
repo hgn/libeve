@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: The Unlicense */
+
 #ifndef LIBEVE_H
 #define LIBEVE_H
 

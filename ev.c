@@ -1,5 +1,4 @@
-/* Hagen Paul Pfeifer <hagen@jauu.net>
- * Public Domain Software - do what ever you want */
+/* SPDX-License-Identifier: The Unlicense */
 
 #include "ev.h"
 
