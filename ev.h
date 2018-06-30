@@ -31,7 +31,7 @@ struct ev_entry;
 struct ev *ev_new(int flags);
 
 int ev_add(struct ev *, struct ev_entry *);
-int ev_loop(struct ev *, uint32_t);
+int ev_loop(struct ev *, int);
 int ev_run_out(struct ev *);
 
 
@@ -93,9 +93,9 @@ int ev_timer_cancel(struct ev *, struct ev_entry *);
  * manually somewhere else in the program. Both signal handling routines
  * will conflict.
  */
-struct ev_entry *ev_signal_new(struct signal_mask, );
+//struct ev_entry *ev_signal_new(struct signal_mask, );
 
-int ev_signal_add(int signo);
+//int ev_signal_add(int signo);
 
 
 

@@ -62,8 +62,8 @@ static int do_cancel_test(struct ev *ev)
 {
 	int ret, flags = 0;
 	struct ev_entry *eve1, *eve2;
-	const struct timespec timespec1 = { .tv_sec = 5, .tv_nsec = 0 };
-	const struct timespec timespec2 = { .tv_sec = 1, .tv_nsec = 0 };
+	struct timespec timespec1 = { .tv_sec = 5, .tv_nsec = 0 };
+	struct timespec timespec2 = { .tv_sec = 1, .tv_nsec = 0 };
 	struct ev_wrapper *ev_wrapper;
 
 	fprintf(stderr, "run timer cancel test ...");

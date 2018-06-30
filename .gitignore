@@ -1,6 +1,9 @@
 test
 
 cscope.out
+cscope.files
+cscope.in.out
+cscope.po.out
 
 *.d
 *.o

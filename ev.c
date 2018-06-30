@@ -4,6 +4,7 @@
 
 #include <sys/epoll.h>
 #include <sys/timerfd.h>
+#include <time.h>
 
 
 #ifndef rdtscll
@@ -110,7 +111,7 @@ struct ev_entry {
 	void *priv_data;
 };
 
-unsigned int ev_entries(struct ev *e) {
+unsigned long long ev_entries(struct ev *e) {
 	return e->entries;
 }
 
@@ -212,7 +213,7 @@ struct ev *ev_new(int flags)
 		return NULL;
 	}
 
-	ev->size = 0;
+	ev->entries = 0;
 	ev->break_loop = 0;
 
 	return ev;
@@ -377,7 +378,7 @@ int ev_add(struct ev *ev, struct ev_entry *ev_entry)
 		return -EINVAL;
 	}
 
-	ev->size++;
+	ev->entries++;
 
 	return 0;
 }
@@ -397,7 +398,7 @@ int ev_del(struct ev *ev, struct ev_entry *ev_entry)
 		return -EINVAL;
 	}
 
-	ev->size--;
+	ev->entries--;
 
 	return 0;
 }
@@ -467,16 +468,16 @@ static inline void ev_process_call_internal(
 	return;
 }
 
-int ev_loop(struct ev *ev, uint32_t flags)
+int ev_loop(struct ev *ev, int flags)
 {
 	int nfds, i;
 	struct epoll_event events[EVE_EPOLL_ARRAY_SIZE];
 
 	eve_assert(ev);
 
-	(void) flags; /* currently ignored */
+	eve_assert(flags == 0); /* currently ignored */
 
-	while (ev->size > 0) {
+	while (ev->entries > 0) {
 		nfds = epoll_wait(ev->fd, events, EVE_EPOLL_ARRAY_SIZE, -1);
 		if (nfds < 0) {
 			return -EINVAL;
