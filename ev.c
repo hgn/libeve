@@ -603,7 +603,6 @@ int ev_timer_cancel(struct ev *ev, struct ev_entry *ev_entry)
 	int ret;
 
 	eve_assert(ev_entry);
-	eve_assert(ev_entry->type == EV_TIMEOUT_ONESHOT);
 
 	ret = ev_del(ev, ev_entry);
 	if (ret != 0)

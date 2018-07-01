@@ -39,10 +39,12 @@ void timer_cd(void *data)
 	return;
 }
 
+
 struct ev_wrapper {
 	struct ev *ev;
 	struct ev_entry *ev_entry;
 };
+
 
 static void cancel_timer_cb(void *data)
 {
@@ -59,6 +61,7 @@ static void cancel_timer_cb(void *data)
 
 	return;
 }
+
 
 /* idea, test that timers are called in strict order and that the
  * first timer (fired after 1 seconds) cancel the 5 second timout timer */
@@ -115,6 +118,7 @@ static int do_cancel_test(struct ev *ev)
 	return 1;
 }
 
+
 static void test_timer(void)
 {
 	struct ev *ev;
@@ -128,8 +132,8 @@ static void test_timer(void)
 	do_cancel_test(ev);
 
 	ev_destroy(ev);
-
 }
+
 
 static void cb_signal(unsigned signal_no, void *data)
 {
@@ -146,7 +150,6 @@ static void cb_signal(unsigned signal_no, void *data)
 		fprintf(stderr, "caught signal %d\n", signal_no);
 		break;
 	}
-
 }
 
 
@@ -180,10 +183,14 @@ static void test_signal(void)
 	ev_destroy(ev);
 }
 
+
 struct ctx_timer {
 	struct ev_entry *eve;
 	struct ev *ev;
+
+	unsigned periodic_runs;
 };
+
 
 struct ctx_timer *ctx_timer_new(void)
 {
@@ -193,6 +200,7 @@ struct ctx_timer *ctx_timer_new(void)
 	memset(ctxo, 0, sizeof(*ctxo));
 	return ctxo;
 }
+
 
 void callback_oneshot(void *data)
 {
@@ -204,6 +212,7 @@ void callback_oneshot(void *data)
 	fprintf(stderr, "callback called\n");
 }
 
+
 static void test_timer_oneshot(void)
 {
 	struct ev *ev;
@@ -211,6 +220,8 @@ static void test_timer_oneshot(void)
 	struct ev_entry *eve;
 	struct ctx_timer *ctxo;
 	struct timespec ts = { .tv_sec = 1, .tv_nsec = 0 };
+
+	fprintf(stderr, "Test: oneshot timer\n");
 
 	ev = ev_new(0);
 	if (!ev) {
@@ -243,36 +254,78 @@ static void test_timer_oneshot(void)
 }
 
 
+void callback_timer_periodic(void *data)
+{
+	int ret;
+	struct ctx_timer *ctxo = data;
+
+	fprintf(stderr, "callback timer periodic called %d\n", ctxo->periodic_runs);
+
+	ctxo->periodic_runs--;
+	if (ctxo->periodic_runs == 0) {
+		// finish, enough testing
+		ret = ev_timer_cancel(ctxo->ev, ctxo->eve);
+		if (ret < 0) {
+			fprintf(stderr, "failed to cancel timer\n");
+			exit(EXIT_FAILURE);
+		}
+		ev_entry_free(ctxo->eve);
+		free(ctxo);
+	}
+}
+
+
+static void test_timer_periodic(void)
+{
+	struct ev *ev;
+	int flags = 0, ret;
+	struct ev_entry *eve;
+	struct ctx_timer *ctxo;
+	struct timespec ts = { .tv_sec = 1, .tv_nsec = 0 };
+
+	fprintf(stderr, "Test: periodic timer\n");
+
+	ev = ev_new(0);
+	if (!ev) {
+		fprintf(stderr, "Cannot create event handler\n");
+		return;
+	}
+
+	ctxo = ctx_timer_new();
+	ctxo->ev = ev;
+	ctxo->periodic_runs = 5;
+
+	eve = ev_timer_periodic_new(&ts, callback_timer_periodic, ctxo);
+	if (!eve) {
+		fprintf(stderr, "Failed to create a ev_entry object\n");
+		exit(EXIT_FAILURE);
+	}
+	ctxo->eve = eve;
+
+	ret = ev_add(ev, eve);
+	if (ret != 0) {
+		fprintf(stderr, "Cannot add entry to event handler\n");
+		exit(EXIT_FAILURE);
+	}
+
+	// ev_loop will run until the timeout is fired. Which
+	// in turn is the last event, which will end the ev loop
+	ev_loop(ev, flags);
+
+	ev_destroy(ev);
+}
+
+
 int main(void)
 {
 	//test_signal();
 	test_timer_oneshot();
-	//test_timer_periodic();
+	test_timer_periodic();
 	//test_timer();
 
 	return EXIT_SUCCESS;
 
-#if 0
-	/* do timer test */
-	ev_e = ev_timer_new(&timespec, timer_cd, ev);
-	if (!ev_e) {
-		fprintf(stderr, "Failed to create a ev_entry object\n");
-		goto err_timer;
-	}
-
-	ret = ev_add(ev, ev_e);
-	if (ret != 0) {
-		fprintf(stderr, "Cannot add entry to event handler\n");
-		goto err_add;
-	}
-
-	ev_loop(ev, flags);
-
-	ev_free(ev);
-#endif
-
 
 }
-
 
 /* vim: set tw=78 ts=4 sw=4 sts=4 ff=unix noet: */
