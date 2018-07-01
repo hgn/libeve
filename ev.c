@@ -107,7 +107,7 @@ struct ev_entry {
 	union {
 		void (*fd_cb)(int, int, void *);
 		void (*timer_cb)(void *);
-		void (*signal_cb)(unsigned, void *);
+		void (*signal_cb)(uint32_t, uint32_t, void *);
 	};
 
 	/* user provided pointer to data */
@@ -508,7 +508,7 @@ static int ev_arm_signal(struct ev_entry *ev_entry)
 }
 
 
-struct ev_entry *ev_signal_new(void (*cb)(unsigned, void *), void *data)
+struct ev_entry *ev_signal_new(void (*cb)(uint32_t, uint32_t, void *), void *data)
 {
 	struct ev_entry *ev_entry;
 	struct ev_entry_data_epoll *ev_entry_data_epoll;
@@ -681,7 +681,7 @@ static inline void ev_process_signal(struct ev_entry *ev_entry)
 		return;
 	}
 
-	ev_entry->signal_cb(sigsiginfo.ssi_signo, ev_entry->data);
+	ev_entry->signal_cb(sigsiginfo.ssi_signo, sigsiginfo.ssi_pid, ev_entry->data);
 }
 
 

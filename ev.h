@@ -120,7 +120,7 @@ struct ev_entry *ev_timer_periodic_new(struct timespec *, void (*cb)(void *), vo
  * manually somewhere else in the program. Both signal handling routines
  * will conflict.
  */
-struct ev_entry *ev_signal_new(void (*cb)(unsigned, void *), void *);
+struct ev_entry *ev_signal_new(void (*cb)(uint32_t, uint32_t, void *), void *);
 
 int ev_signal_catch(struct ev_entry *, int signo);
 

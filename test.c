@@ -135,19 +135,19 @@ static void test_timer(void)
 }
 
 
-static void cb_signal(unsigned signal_no, void *data)
+static void cb_signal(uint32_t signal_no, uint32_t pid, void *data)
 {
 	(void) data;
 
 	switch (signal_no) {
 	case SIGINT:
-		fprintf(stderr, "caught SIGINT\n");
+		fprintf(stderr, "caught SIGINT from pid %u\n", pid);
 		break;
 	case SIGQUIT:
-		fprintf(stderr, "caught SIGQUIT\n");
+		fprintf(stderr, "caught SIGQUIT from pid %u\n", pid);
 		break;
 	default:
-		fprintf(stderr, "caught signal %d\n", signal_no);
+		fprintf(stderr, "caught signal %d from pid %u\n", signal_no, pid);
 		break;
 	}
 }
@@ -318,9 +318,9 @@ static void test_timer_periodic(void)
 
 int main(void)
 {
-	//test_signal();
-	test_timer_oneshot();
-	test_timer_periodic();
+	test_signal();
+	//test_timer_oneshot();
+	//test_timer_periodic();
 	//test_timer();
 
 	return EXIT_SUCCESS;
