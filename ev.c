@@ -619,9 +619,6 @@ static inline void ev_process_timer_oneshot(struct ev *ev,
 	ssize_t ret;
 	unsigned long long missed;
 
-	/* first of all - call user callback */
-	ev_entry->timer_cb(ev_entry->data);
-
 	/* and now: cleanup timer specific data and
 	 * finally all event specific data */
 	ret = read(ev_entry->fd, &missed, sizeof(missed));
@@ -635,6 +632,9 @@ static inline void ev_process_timer_oneshot(struct ev *ev,
 	}
 
 	ev_del(ev, ev_entry);
+
+	/* first of all - call user callback */
+	ev_entry->timer_cb(ev_entry->data);
 }
 
 
@@ -642,9 +642,6 @@ static inline void ev_process_timer_periodic(struct ev_entry *ev_entry)
 {
 	ssize_t ret;
 	unsigned long long missed;
-
-	/* first of all - call user callback */
-	ev_entry->timer_cb(ev_entry->data);
 
 	/* and now: cleanup timer specific data and
 	 * finally all event specific data */
@@ -657,6 +654,9 @@ static inline void ev_process_timer_periodic(struct ev_entry *ev_entry)
 		// cannot do anything
 		eve_assert(0);
 	}
+
+	/* first of all - call user callback */
+	ev_entry->timer_cb(ev_entry->data);
 }
 
 

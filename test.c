@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <signal.h>
+#include <string.h>
 
 #include "ev.h"
 
@@ -134,7 +135,18 @@ static void cb_signal(unsigned signal_no, void *data)
 {
 	(void) data;
 
-	fprintf(stderr, "caught signal %d\n", signal_no);
+	switch (signal_no) {
+	case SIGINT:
+		fprintf(stderr, "caught SIGINT\n");
+		break;
+	case SIGQUIT:
+		fprintf(stderr, "caught SIGQUIT\n");
+		break;
+	default:
+		fprintf(stderr, "caught signal %d\n", signal_no);
+		break;
+	}
+
 }
 
 
@@ -155,8 +167,8 @@ static void test_signal(void)
 		fprintf(stderr, "failed to call ev_signal_new\n");
 		abort();
 	}
-	ev_signal_catch(ev_entry, SIGHUP);
-	ev_signal_catch(ev_entry, SIGINT);
+	ev_signal_catch(ev_entry, SIGQUIT); // ^ backslash
+	ev_signal_catch(ev_entry, SIGINT);  // ^C
 	ret = ev_add(ev, ev_entry);
 	if (ret != 0) {
 		fprintf(stderr, "Cannot add entry to event handler\n");
@@ -168,10 +180,74 @@ static void test_signal(void)
 	ev_destroy(ev);
 }
 
+struct ctx_timer {
+	struct ev_entry *eve;
+	struct ev *ev;
+};
+
+struct ctx_timer *ctx_timer_new(void)
+{
+	struct ctx_timer *ctxo;
+	ctxo = malloc(sizeof(*ctxo));
+	if (!ctxo) abort();
+	memset(ctxo, 0, sizeof(*ctxo));
+	return ctxo;
+}
+
+void callback_oneshot(void *data)
+{
+	struct ctx_timer *ctxo = data;
+
+	ev_entry_free(ctxo->eve);
+	free(ctxo);
+
+	fprintf(stderr, "callback called\n");
+}
+
+static void test_timer_oneshot(void)
+{
+	struct ev *ev;
+	int flags = 0, ret;
+	struct ev_entry *eve;
+	struct ctx_timer *ctxo;
+	struct timespec ts = { .tv_sec = 1, .tv_nsec = 0 };
+
+	ev = ev_new(0);
+	if (!ev) {
+		fprintf(stderr, "Cannot create event handler\n");
+		return;
+	}
+
+	ctxo = ctx_timer_new();
+	ctxo->ev = ev;
+
+	eve = ev_timer_oneshot_new(&ts, callback_oneshot, ctxo);
+	if (!eve) {
+		fprintf(stderr, "Failed to create a ev_entry object\n");
+		exit(EXIT_FAILURE);
+	}
+
+	ctxo->eve = eve;
+
+	ret = ev_add(ev, eve);
+	if (ret != 0) {
+		fprintf(stderr, "Cannot add entry to event handler\n");
+		exit(EXIT_FAILURE);
+	}
+
+	// ev_loop will run until the timeout is fired. Which
+	// in turn is the last event, which will end the ev loop
+	ev_loop(ev, flags);
+
+	ev_destroy(ev);
+}
+
 
 int main(void)
 {
-	test_signal();
+	//test_signal();
+	test_timer_oneshot();
+	//test_timer_periodic();
 	//test_timer();
 
 	return EXIT_SUCCESS;
