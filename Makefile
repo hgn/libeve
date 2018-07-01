@@ -3,8 +3,8 @@
 OBJ := ev.o
 LIBRARY := ev.a
 
+CC     ?= gcc
 LIBS   := -lrt  # for clock_gettime(2)
-CC     := gcc-8
 CFLAGS := -Wall -Wextra -Wunused -pipe -Wwrite-strings -Wsign-compare \
 				 -Wshadow -Wformat=2 -Wundef -Wstrict-prototypes   \
 				 -fno-strict-aliasing -fno-common -Wformat-security \

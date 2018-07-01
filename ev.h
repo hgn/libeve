@@ -24,6 +24,8 @@ struct ev;
 struct ev_entry;
 
 
+
+
 /**
  * ev_new - initialize a new event object, eve main data structure
  *
@@ -43,6 +45,7 @@ struct ev *ev_new(int flags);
  */
 int ev_add(struct ev *, struct ev_entry *);
 
+
 /**
  * Main event loop start function
  *
@@ -50,6 +53,7 @@ int ev_add(struct ev *, struct ev_entry *);
  * Please call this at the end after every ev_event's are registered.
  */
 int ev_loop(struct ev *, int);
+
 
 
 /* To end the processing loop
@@ -61,22 +65,6 @@ int ev_loop(struct ev *, int);
  */
 int ev_run_out(struct ev *);
 
-
-/**
- * ev_destroy - deallocate ev structure
- * @ev: pointer instance of ev object
- *
- * Shutdown, close and free all associated resourches of ev. This function
- * it the counterpart to ev_new() and should at least be called at
- * program shutdown or restart.
- *
- * Keep in mind that the caller is responsible to deallocate all registered
- * ev_event data structures, close file descriptors, etc. This cannot be done
- * by ev_destroy().
- *
- * This function cannot fail and thus return no return status.
- */
-void ev_destroy(struct ev *);
 
 /**
  * ev_entries - return number of active event entries
@@ -99,6 +87,23 @@ int ev_fd(struct ev *ev);
 
 
 /**
+ * ev_destroy - deallocate ev structure
+ * @ev: pointer instance of ev object
+ *
+ * Shutdown, close and free all associated resourches of ev. This function
+ * it the counterpart to ev_new() and should at least be called at
+ * program shutdown or restart.
+ *
+ * Keep in mind that the caller is responsible to deallocate all registered
+ * ev_event data structures, close file descriptors, etc. This cannot be done
+ * by ev_destroy().
+ *
+ * This function cannot fail and thus return no return status.
+ */
+void ev_destroy(struct ev *);
+
+
+/**
  * ev_entry new provides api to register a raw filedescriptor (e.g. socket)
  * for later use in epoll set. The arguments:
  *
@@ -113,6 +118,8 @@ int ev_fd(struct ev *ev);
  * 2) EV_READ or EV_WRITE
  * 3) the private data pointer, registered at ev_entry_new time
  *
+ * Warning: do not throw exceptions or call longjmp from a callback.
+ *
  * The next steps is to register this entry at the main loop wia
  * ev_add()
  *
@@ -120,6 +127,7 @@ int ev_fd(struct ev *ev);
  * to a newly allocated struct.
  */
 struct ev_entry *ev_entry_new(int, int, void (*cb)(int, int, void *), void *);
+
 
 /**
  * Deregister event from main event loop
@@ -135,13 +143,40 @@ int ev_del(struct ev *, struct ev_entry *);
 /**
  * Deallocate resourcheso of ev_eventy
  *
- * This is the counterpart of ev_entry_new() and must
- * be called to free associated memory.
+ * This is the counterpart of ev_entry_new(), ev_timer_oneshot_new(),
+ * ev_timer_periodic_new() and ev_signal_new() and must be called to free
+ * associated memory.
  */
 void ev_entry_free(struct ev_entry *);
 
 
+
+
+
+
+/**
+ * Create new oneshot timer
+ *
+ * Just arm a timer for one shot, after the callback the timer is not re-added
+ * to the main loop automatically.  The caller is responsible to free
+ * resourches afterwards with ev_entry_free()
+ *
+ * Warning: do not throw exceptions or call longjmp from a callback.
+ */
 struct ev_entry *ev_timer_oneshot_new(struct timespec *, void (*cb)(void *), void *);
+
+
+/**
+ * Start periodic timer
+ *
+ * Ater timespec time the user provided callack cb is called. To end the timer
+ * ev_timer_cancel() must be called. Normally followed by ev_entry_free()
+ *
+ * Warning: do not throw exceptions or call longjmp from a callback.
+ *
+ * Returns NULL in case the case of an error
+ */
+struct ev_entry *ev_timer_periodic_new(struct timespec *, void (*cb)(void *), void *);
 
 
 /*
@@ -154,17 +189,6 @@ struct ev_entry *ev_timer_oneshot_new(struct timespec *, void (*cb)(void *), voi
 int ev_timer_cancel(struct ev *, struct ev_entry *);
 
 
-/**
- * ev_entries - return number of active event entries
- * @ev: pointer instance of ev object
- *
- * This function returns the number of active event entries, like timers,
- * descriptors or signals. With each ev_event_add the counter is incremented
- * and vice versa for delete operations.
- *
- * This function cannot fail.
- */
-struct ev_entry *ev_timer_periodic_new(struct timespec *, void (*cb)(void *), void *);
 
 
 /**
@@ -204,6 +228,8 @@ struct ev_entry *ev_signal_new(void (*cb)(uint32_t, uint32_t, void *), void *);
  *
  */
 int ev_signal_catch(struct ev_entry *, int signo);
+
+
 
 
 /**

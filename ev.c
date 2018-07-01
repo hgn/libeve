@@ -142,7 +142,7 @@ static struct ev *struct_ev_new_internal(void)
 }
 
 
-inline void ev_entry_set_data(struct ev_entry *entry,
+void ev_entry_set_data(struct ev_entry *entry,
 			      void *data)
 {
 	entry->data = data;
