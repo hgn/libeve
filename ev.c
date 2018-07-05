@@ -2,6 +2,8 @@
 
 #include "ev.h"
 
+#define __STDC_LIMIT_MACROS
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -106,7 +108,8 @@ struct ev_entry {
 
 	union {
 		void (*fd_cb)(int, int, void *);
-		void (*timer_cb)(void *);
+		void (*timer_cb_oneshot)(void *);
+		void (*timer_cb_periodic)(unsigned long long, void *);
 		void (*signal_cb)(uint32_t, uint32_t, void *);
 	};
 
@@ -307,9 +310,9 @@ struct ev_entry *ev_timer_oneshot_new(struct timespec *timespec,
 	if (!ev_entry)
 		return NULL;
 
-	ev_entry->type     = EV_TIMEOUT_ONESHOT;
-	ev_entry->timer_cb = cb;
-	ev_entry->data     = data;
+	ev_entry->type = EV_TIMEOUT_ONESHOT;
+	ev_entry->data = data;
+	ev_entry->timer_cb_oneshot = cb;
 
 	memcpy(&ev_entry->timespec, timespec, sizeof(struct timespec));
 
@@ -318,7 +321,7 @@ struct ev_entry *ev_timer_oneshot_new(struct timespec *timespec,
 
 
 struct ev_entry *ev_timer_periodic_new(struct timespec *timespec,
-		void (*cb)(void *), void *data)
+		void (*cb)(unsigned long long, void *), void *data)
 {
 	struct ev_entry *ev_entry;
 
@@ -328,9 +331,9 @@ struct ev_entry *ev_timer_periodic_new(struct timespec *timespec,
 	if (!ev_entry)
 		return NULL;
 
-	ev_entry->type     = EV_TIMEOUT_PERIODIC;
-	ev_entry->timer_cb = cb;
-	ev_entry->data     = data;
+	ev_entry->type = EV_TIMEOUT_PERIODIC;
+	ev_entry->data = data;
+	ev_entry->timer_cb_periodic = cb;
 
 	memcpy(&ev_entry->timespec, timespec, sizeof(struct timespec));
 
@@ -633,7 +636,7 @@ static inline void ev_process_timer_oneshot(struct ev *ev,
 	ev_del(ev, ev_entry);
 
 	/* first of all - call user callback */
-	ev_entry->timer_cb(ev_entry->data);
+	ev_entry->timer_cb_oneshot(ev_entry->data);
 }
 
 
@@ -655,7 +658,7 @@ static inline void ev_process_timer_periodic(struct ev_entry *ev_entry)
 	}
 
 	/* first of all - call user callback */
-	ev_entry->timer_cb(ev_entry->data);
+	ev_entry->timer_cb_periodic(missed, ev_entry->data);
 }
 
 

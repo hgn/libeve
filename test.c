@@ -254,12 +254,16 @@ static void test_timer_oneshot(void)
 }
 
 
-void callback_timer_periodic(void *data)
+void callback_timer_periodic(unsigned long long missed, void *data)
 {
 	int ret;
 	struct ctx_timer *ctxo = data;
 
 	fprintf(stderr, "callback timer periodic called %d\n", ctxo->periodic_runs);
+
+	if (missed > 1) {
+		fprintf(stderr, "missed timer events: %llu\n", missed - 1);
+	}
 
 	ctxo->periodic_runs--;
 	if (ctxo->periodic_runs == 0) {
@@ -318,9 +322,9 @@ static void test_timer_periodic(void)
 
 int main(void)
 {
-	test_signal();
-	//test_timer_oneshot();
-	//test_timer_periodic();
+	//test_signal();
+	test_timer_oneshot();
+	test_timer_periodic();
 	//test_timer();
 
 	return EXIT_SUCCESS;

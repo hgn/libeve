@@ -172,11 +172,16 @@ struct ev_entry *ev_timer_oneshot_new(struct timespec *, void (*cb)(void *), voi
  * Ater timespec time the user provided callack cb is called. To end the timer
  * ev_timer_cancel() must be called. Normally followed by ev_entry_free()
  *
+ * NOTE: the first callback argument tell the number of missed events. This
+ * can happen if too much work is scheduled and the even machinery cannot
+ * execute fast enough. Normally you should only see 1.
+ *
  * Warning: do not throw exceptions or call longjmp from a callback.
  *
  * Returns NULL in case the case of an error
  */
-struct ev_entry *ev_timer_periodic_new(struct timespec *, void (*cb)(void *), void *);
+struct ev_entry *ev_timer_periodic_new(struct timespec *,
+		                       void (*cb)(unsigned long long missed, void *), void *);
 
 
 /*
