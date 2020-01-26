@@ -222,7 +222,6 @@ __extension__ extern unsigned long long __sdt_unsp;
    nice with code in COMDAT sections, which comes up in C++ code.
    Without that assembler support, some combinations of probe placements
    in certain kinds of C++ code may produce link-time errors.  */
-#include "sdt-config.h"
 #if _SDT_ASM_SECTION_AUTOGROUP_SUPPORT
 # define _SDT_ASM_AUTOGROUP "?"
 #else

@@ -26,6 +26,14 @@ CFLAGS += -Wl,-z,defs -Wl,-z,relro -fexceptions
 CFLAGS += -ftrapv
 CFLAGS += -std=gnu11
 CFLAGS += -Wno-unused-function
+CFLAGS += -I.
+
+# we enable SDT markers by default, compile
+# with "SDT=disable make" if you want no SDT
+# markers
+ifneq ($(SDT),disable)
+CFLAGS += -DSDT_ENABLED
+endif
 
 CFLAGS += -ggdb3 -Werror
 
