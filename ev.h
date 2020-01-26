@@ -6,20 +6,6 @@
 #include <sys/time.h>
 #include <inttypes.h>
 
-#if defined(SDT_ENABLED)
-/*
- * Quote sdt-config.h.in: Defines
- * '_SDT_ASM_SECTION_AUTOGROUP_SUPPORT to 0 or 1
- * to indicate whether the assembler supports "?"
- * in .pushsection directives.'
- * We define this to 0 - we don't assume that all
- * possible compilers on all possible archs support
- * this feature. BUT: if you realize C++ link errors
- * you may want to enable this flag.
- */
-#define _SDT_ASM_SECTION_AUTOGROUP_SUPPORT 0
-#include <sdt.h>
-#endif
 
 #define	EV_READ             (1 << 0)
 #define	EV_WRITE            (1 << 1)
