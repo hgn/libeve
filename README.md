@@ -86,3 +86,17 @@ Argument(s):
 
 - int signal number
 - int pid
+
+# Install Perf Manually
+
+Sometime the distribution perf may a little bit outdated. To
+install a up-to-date Linux HEAD version, follow the next steps:
+
+```
+git clone https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git
+cd linux/tools/perf
+# for make, please check that every required dependency for your
+# system is installed, aptitude install <package> is your friend otherwise
+sudo make prefix=/usr/local install
+export PATH=/usr/local/bin:$PATH
+```
