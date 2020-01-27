@@ -554,27 +554,33 @@ int ev_add(struct ev *ev, struct ev_entry *ev_entry)
 	eve_assert(ev);
 	eve_assert(ev_entry);
 
+	STAP_PROBE(libev, ev_add);
+
 	ev_entry_data_epoll = ev_entry->priv_data;
 
 	memset(&epoll_ev, 0, sizeof(struct epoll_event));
 
 	switch (ev_entry->type) {
 	case EV_TIMEOUT_ONESHOT:
+		STAP_PROBE(libev, ev_add_timeout_oneshot);
 		ret = ev_arm_timerfd_oneshot(ev_entry);
 		if (ret != 0)
 			return -EINVAL;
 		break;
 	case EV_TIMEOUT_PERIODIC:
+		STAP_PROBE(libev, ev_add_timeout_periodic);
 		ret = ev_arm_timerfd_periodic(ev_entry);
 		if (ret != 0)
 			return -EINVAL;
 		break;
 	case EV_SIGNAL:
+		STAP_PROBE(libev, ev_add_signal);
 		ret = ev_arm_signal(ev_entry);
 		if (ret != 0)
 			return -EINVAL;
 		break;
 	default:
+		STAP_PROBE(libev, ev_add_read_write);
 		// no special treatment of other entries
 		break;
 	}
@@ -650,6 +656,7 @@ static inline void ev_process_timer_oneshot(struct ev *ev,
 	ev_del(ev, ev_entry);
 
 	/* first of all - call user callback */
+	STAP_PROBE(libev, trigger_timeout_oneshot);
 	ev_entry->timer_cb_oneshot(ev_entry->data);
 }
 
@@ -672,6 +679,7 @@ static inline void ev_process_timer_periodic(struct ev_entry *ev_entry)
 	}
 
 	/* first of all - call user callback */
+	STAP_PROBE(libev, trigger_timeout_periodic);
 	ev_entry->timer_cb_periodic(missed, ev_entry->data);
 }
 
@@ -698,6 +706,7 @@ static inline void ev_process_signal(struct ev_entry *ev_entry)
 		return;
 	}
 
+	STAP_PROBE2(libev, trigger_signal, sigsiginfo.ssi_signo, sigsiginfo.ssi_pid);
 	ev_entry->signal_cb(sigsiginfo.ssi_signo, sigsiginfo.ssi_pid, ev_entry->data);
 }
 
@@ -712,6 +721,7 @@ static inline void ev_process_call_internal(
 	switch (ev_entry->type) {
 	case EV_READ:
 	case EV_WRITE:
+		STAP_PROBE1(libev, trigger_read_write, ev_entry->fd);
 		ev_entry->fd_cb(ev_entry->fd, ev_entry->type, ev_entry->data);
 		return;
 		break;
@@ -742,7 +752,9 @@ int ev_loop(struct ev *ev, int flags)
 	eve_assert(flags == 0); /* currently ignored */
 
 	while (ev->entries > 0) {
+		STAP_PROBE(libev, epoll_wait_enter);
 		nfds = epoll_wait(ev->fd, events, EVE_EPOLL_ARRAY_SIZE, -1);
+		STAP_PROBE1(libev, epoll_wait_return, nfds);
 		if (nfds < 0) {
 			return -EINVAL;
 		}
