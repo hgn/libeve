@@ -30,7 +30,7 @@
  * you may want to enable this flag.
  */
 #define _SDT_ASM_SECTION_AUTOGROUP_SUPPORT 0
-#include <sdt.h>
+#include <sdt-owned.h>
 #endif
 
 #ifndef rdtscll
