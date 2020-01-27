@@ -57,7 +57,7 @@ cscope:
 	cscope -b -q
 
 clean:
-	rm -f $(OBJ) test
+	rm -f $(OBJ) test perf.data perf.data.old
 
 distclean: clean
 	rm -f ${CURDIR}/cscope.*

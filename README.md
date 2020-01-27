@@ -21,6 +21,12 @@ List the available SDT markers in `test` executable:
 perf list sdt ./test
 ```
 
+List all traceable function (more usefull when not stripped :-)
+
+```
+perf probe -x ./test --funcs
+```
+
 To record SDT markers they must be first enabled via `perf probe`
 
 ```
