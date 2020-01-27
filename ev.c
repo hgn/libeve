@@ -29,12 +29,16 @@
  * this feature. BUT: if you realize C++ link errors
  * you may want to enable this flag.
  */
-#define _SDT_ASM_SECTION_AUTOGROUP_SUPPORT 0
-#include <sdt-owned.h>
+# define _SDT_ASM_SECTION_AUTOGROUP_SUPPORT 0
+# include <sdt-owned.h>
+#else
+# define STAP_PROBE(a, b)
+# define STAP_PROBE1(a, b, c)
+# define STAP_PROBE2(a, b, c, d)
 #endif
 
 #ifndef rdtscll
-#define rdtscll(val) \
+# define rdtscll(val) \
 	__asm__ __volatile__("rdtsc" : "=A" (val))
 #endif
 
@@ -55,13 +59,13 @@
 #endif
 
 #if defined(LIBEVE_DEBUG)
-#define pr_debug(fmt_str, ...) \
+# define pr_debug(fmt_str, ...) \
 	fprintf(stderr, fmt_str, ##__VA_ARGS__)
-#define	eve_assert(x) assert(x)
+# define	eve_assert(x) assert(x)
 #else
-#define pr_debug(fmt_str, ...) \
+# define pr_debug(fmt_str, ...) \
         ({ if (0) fprintf(stderr, fmt_str, ##__VA_ARGS__); 0; })
-#define	eve_assert(x)
+# define	eve_assert(x)
 #endif
 
 /* FIXME: check for wrong subtraction/addition operation of struct timespec */
