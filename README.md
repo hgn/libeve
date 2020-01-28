@@ -101,8 +101,10 @@ install a up-to-date Linux HEAD version, follow the next steps:
 ```
 git clone https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git
 cd linux/tools/perf
-# for make, please check that every required dependency for your
-# system is installed, aptitude install <package> is your friend otherwise
+# 1. for make, please check that every required dependency for your
+#    system is installed, aptitude install <package> is your friend otherwise
+# 2. installation is required if you want to use perf script, if not you can
+#    just simple call perf directly
 sudo make prefix=/usr/local install
 export PATH=/usr/local/bin:$PATH
 ```

@@ -19,7 +19,7 @@ CFLAGS := -Wall -Wextra -Wunused -pipe -Wwrite-strings -Wsign-compare \
 				 -Wswitch-default -Wconversion -Wunreachable-code \
 				 -Wno-format-extra-args -Wno-format-zero-length \
 				 -Wformat-nonliteral -Werror=implicit-function-declaration
-CFLAGS += -fsanitize=address  -fsanitize=undefined
+#CFLAGS += -fsanitize=address  -fsanitize=undefined
 CFLAGS += -D_FORTIFY_SOURCE=2 -fasynchronous-unwind-tables
 CFLAGS += -fstack-protector-strong -grecord-gcc-switches
 CFLAGS += -Wl,-z,defs -Wl,-z,relro -fexceptions
@@ -42,12 +42,14 @@ EXTRA_CFLAGS := -DLIBEVE_DEBUG
 .PHONY: all clean cscope
 
 all: $(LIBRARY) test
+	make -C examples all
 
 %.o : %.c
 	$(CC) -c $(CFLAGS) $(EXTRA_CFLAGS) $(CPPFLAGS) $< -o $@
 
 $(LIBRARY): $(OBJ)
 	ar rcs $(LIBRARY) $(OBJ)
+	ln ev.a libev.a
 
 test: $(OBJ) test.c
 	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(LIBS) -o test $(OBJ) test.c
@@ -57,7 +59,8 @@ cscope:
 	cscope -b -q
 
 clean:
-	rm -f $(OBJ) test perf.data perf.data.old
+	rm -f $(OBJ) ev.a libev.a test perf.data perf.data.old
+	make -C examples clean
 
 distclean: clean
 	rm -f ${CURDIR}/cscope.*
