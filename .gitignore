@@ -2,6 +2,8 @@ test
 perf.data
 perf.data.old
 
+examples/server
+
 cscope.out
 cscope.files
 cscope.in.out
