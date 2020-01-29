@@ -61,7 +61,7 @@ int init_server_socket(void)
 
 void process_client_read(int fd, int what, void *priv_data)
 {
-	int ret, client_sock_fd = fd;
+	int client_sock_fd = fd;
 	ssize_t read_data;
 	char ch;
 
