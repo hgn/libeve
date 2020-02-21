@@ -7,6 +7,7 @@
 #include <inttypes.h>
 
 
+/* pre-defined ev interal flags */
 #define	EV_READ             (1 << 0)
 #define	EV_WRITE            (1 << 1)
 #define	EV_TIMEOUT_ONESHOT  (1 << 2)
@@ -129,6 +130,7 @@ void ev_destroy(struct ev *);
  */
 struct ev_entry *ev_entry_new(int, int, void (*cb)(int, int, void *), void *);
 
+struct ev_entry *ev_entry_new_raw(int, uint32_t, void (*cb)(int, int, void *), void *);
 
 /**
  * Deregister event from main event loop

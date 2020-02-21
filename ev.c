@@ -118,8 +118,18 @@ struct ev_entry {
 	/* monitored FD if type is EV_READ or EV_WRITE */
 	int fd;
 
-	/* EV_READ, EV_WRITE or EV_TIMEOUT_ONESHOT */
-	int type;
+	/* EV_* if raw is 0 -> type is used. E.g for
+	 * EV_READ, EV_WRITE or EV_TIMEOUT_ONESHOT.\
+	 * EV_RAW_* if raw is 1 -> type_raw is used then
+	 */
+	union {
+		int type;
+		uint32_t type_raw;
+	};
+
+	/* 0 for "old" mode, if 1 type is interpreted identical
+	 * as epoll_ctl flags */
+	int raw;
 
 	/* timeout val if type is EV_TIMEOUT_ONESHOT */
 	struct timespec timespec;
@@ -298,6 +308,7 @@ struct ev_entry *ev_entry_new(int fd, int what,
 	ev_entry->type  = what;
 	ev_entry->fd_cb = cb;
 	ev_entry->data  = data;
+	ev_entry->raw   = 0;
 
 	ev_entry_data_epoll = ev_entry->priv_data;
 
@@ -312,6 +323,31 @@ struct ev_entry *ev_entry_new(int fd, int what,
 		/* cannot happen - previously catched via assert(3) */
 		break;
 	}
+
+	return ev_entry;
+}
+
+struct ev_entry *ev_entry_new_raw(int fd, uint32_t events,
+		void (*cb)(int, int, void *), void *data)
+{
+	struct ev_entry *ev_entry;
+	struct ev_entry_data_epoll *ev_entry_data_epoll;
+
+	eve_assert(cb);
+	eve_assert(fd >= 0);
+
+	ev_entry = ev_entry_new_epoll_internal();
+	if (!ev_entry)
+		return NULL;
+
+	ev_entry->fd = fd;
+	ev_entry->type_raw = events;
+	ev_entry->raw = 1;
+	ev_entry->fd_cb = cb;
+	ev_entry->data = data;
+
+	ev_entry_data_epoll = ev_entry->priv_data;
+	ev_entry_data_epoll->flags = events;
 
 	return ev_entry;
 }
@@ -331,6 +367,7 @@ struct ev_entry *ev_timer_oneshot_new(struct timespec *timespec,
 	ev_entry->type = EV_TIMEOUT_ONESHOT;
 	ev_entry->data = data;
 	ev_entry->timer_cb_oneshot = cb;
+	ev_entry->raw = 0;
 
 	memcpy(&ev_entry->timespec, timespec, sizeof(struct timespec));
 
@@ -352,6 +389,7 @@ struct ev_entry *ev_timer_periodic_new(struct timespec *timespec,
 	ev_entry->type = EV_TIMEOUT_PERIODIC;
 	ev_entry->data = data;
 	ev_entry->timer_cb_periodic = cb;
+	ev_entry->raw = 0;
 
 	memcpy(&ev_entry->timespec, timespec, sizeof(struct timespec));
 
@@ -380,6 +418,9 @@ void ev_entry_free(struct ev_entry *ev_entry)
 	eve_assert(ev_entry);
 	eve_assert(ev_entry->priv_data);
 
+	if (ev_entry->raw)
+		goto out;
+
 	switch (ev_entry->type) {
 	case EV_TIMEOUT_ONESHOT:
 	case EV_TIMEOUT_PERIODIC:
@@ -394,6 +435,7 @@ void ev_entry_free(struct ev_entry *ev_entry)
 		break;
 	}
 
+out:
 	free(ev_entry->priv_data);
 	memset(ev_entry, 0, sizeof(struct ev_entry));
 	free(ev_entry);
@@ -541,6 +583,7 @@ struct ev_entry *ev_signal_new(void (*cb)(uint32_t, uint32_t, void *), void *dat
 	ev_entry->type = EV_SIGNAL;
 	ev_entry->signal_cb = cb;
 	ev_entry->data = data;
+	ev_entry->raw = 0;
 
 	ev_entry_data_epoll = ev_entry->priv_data;
 	sigemptyset(&ev_entry_data_epoll->signal_mask);
@@ -563,6 +606,12 @@ int ev_add(struct ev *ev, struct ev_entry *ev_entry)
 	ev_entry_data_epoll = ev_entry->priv_data;
 
 	memset(&epoll_ev, 0, sizeof(struct epoll_event));
+
+	if (ev_entry->raw) {
+		/* type is interpreted as raw epoll_ctl event, not special
+		 * internal event, no special treatment required */
+		goto out;
+	}
 
 	switch (ev_entry->type) {
 	case EV_TIMEOUT_ONESHOT:
@@ -588,6 +637,8 @@ int ev_add(struct ev *ev, struct ev_entry *ev_entry)
 		// no special treatment of other entries
 		break;
 	}
+
+out:
 
 	/* FIXME: the mapping must be a one to one mapping */
 	epoll_ev.events   = ev_entry_data_epoll->flags;
@@ -721,6 +772,12 @@ static inline void ev_process_call_internal(
 	(void) ev;
 
 	eve_assert(ev_entry);
+
+	if (ev_entry->raw) {
+		STAP_PROBE1(libev, trigger_raw, ev_entry->fd);
+		ev_entry->fd_cb(ev_entry->fd, (int)ev_entry->type_raw, ev_entry->data);
+		return;
+	}
 
 	switch (ev_entry->type) {
 	case EV_READ:
