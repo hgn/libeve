@@ -647,8 +647,6 @@ out:
 
 	ret = epoll_ctl(ev->fd, EPOLL_CTL_ADD, ev_entry->fd, &epoll_ev);
 	if (ret < 0) {
-		printf("errno: %d\n", errno);
-		printf("events %u\n", epoll_ev.events);
 		return -EINVAL;
 	}
 
