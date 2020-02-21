@@ -319,13 +319,76 @@ static void test_timer_periodic(void)
 	ev_destroy(ev);
 }
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <sys/epoll.h>
+#include <assert.h>
+
+static uint32_t events = EPOLLIN | EPOLLPRI | EPOLLERR | EPOLLHUP;
+
+void fd_cb_raw(int fd, uint32_t events_ret, void *priv_data)
+{
+	struct ev *ev = priv_data;
+
+	(void) fd;
+
+	assert(events == events_ret);
+	ev_run_out(ev);
+}
+
+
+void test_events_raw(void)
+{
+	struct ev *ev;
+	int flags = 0, ret;
+	struct ev_entry *eve;
+	int pipefd[2];
+
+	fprintf(stderr, "Test: raw events\n");
+
+	if (pipe(pipefd) == -1) {
+		perror("pipe");
+		exit(EXIT_FAILURE);
+	}
+
+
+	ev = ev_new(0);
+	if (!ev) {
+		fprintf(stderr, "Cannot create event handler\n");
+		return;
+	}
+
+	eve = ev_entry_new_raw(pipefd[0], events, fd_cb_raw, ev);
+	if (!eve) {
+		fprintf(stderr, "Failed to create a ev_entry object\n");
+		exit(EXIT_FAILURE);
+	}
+
+	ret = ev_add(ev, eve);
+	if (ret != 0) {
+		fprintf(stderr, "Cannot add entry to event handler\n");
+		exit(EXIT_FAILURE);
+	}
+
+	write(pipefd[1], "1", 1);
+
+	// ev_loop will run until the timeout is fired. Which
+	// in turn is the last event, which will end the ev loop
+	ev_loop(ev, flags);
+
+	ev_entry_free(eve);
+	ev_destroy(ev);
+}
+
 
 int main(void)
 {
 	//test_signal();
 	test_timer_oneshot();
 	test_timer_periodic();
-	//test_timer();
+	test_timer();
+	test_events_raw();
 
 	return EXIT_SUCCESS;
 

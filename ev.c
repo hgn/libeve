@@ -136,6 +136,7 @@ struct ev_entry {
 
 	union {
 		void (*fd_cb)(int, int, void *);
+		void (*fd_cb_raw)(int, uint32_t, void *);
 		void (*timer_cb_oneshot)(void *);
 		void (*timer_cb_periodic)(unsigned long long, void *);
 		void (*signal_cb)(uint32_t, uint32_t, void *);
@@ -328,7 +329,7 @@ struct ev_entry *ev_entry_new(int fd, int what,
 }
 
 struct ev_entry *ev_entry_new_raw(int fd, uint32_t events,
-		void (*cb)(int, int, void *), void *data)
+		void (*cb)(int, uint32_t, void *), void *data)
 {
 	struct ev_entry *ev_entry;
 	struct ev_entry_data_epoll *ev_entry_data_epoll;
@@ -342,8 +343,8 @@ struct ev_entry *ev_entry_new_raw(int fd, uint32_t events,
 
 	ev_entry->fd = fd;
 	ev_entry->type_raw = events;
+	ev_entry->fd_cb_raw = cb;
 	ev_entry->raw = 1;
-	ev_entry->fd_cb = cb;
 	ev_entry->data = data;
 
 	ev_entry_data_epoll = ev_entry->priv_data;
@@ -646,6 +647,8 @@ out:
 
 	ret = epoll_ctl(ev->fd, EPOLL_CTL_ADD, ev_entry->fd, &epoll_ev);
 	if (ret < 0) {
+		printf("errno: %d\n", errno);
+		printf("events %u\n", epoll_ev.events);
 		return -EINVAL;
 	}
 
@@ -775,7 +778,7 @@ static inline void ev_process_call_internal(
 
 	if (ev_entry->raw) {
 		STAP_PROBE1(libev, trigger_raw, ev_entry->fd);
-		ev_entry->fd_cb(ev_entry->fd, (int)ev_entry->type_raw, ev_entry->data);
+		ev_entry->fd_cb_raw(ev_entry->fd, ev_entry->type_raw, ev_entry->data);
 		return;
 	}
 

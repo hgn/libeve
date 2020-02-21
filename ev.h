@@ -130,7 +130,7 @@ void ev_destroy(struct ev *);
  */
 struct ev_entry *ev_entry_new(int, int, void (*cb)(int, int, void *), void *);
 
-struct ev_entry *ev_entry_new_raw(int, uint32_t, void (*cb)(int, int, void *), void *);
+struct ev_entry *ev_entry_new_raw(int, uint32_t, void (*cb)(int, uint32_t, void *), void *);
 
 /**
  * Deregister event from main event loop
