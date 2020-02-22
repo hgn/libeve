@@ -49,6 +49,7 @@ all: $(LIBRARY) test
 
 $(LIBRARY): $(OBJ)
 	ar rcs $(LIBRARY) $(OBJ)
+	@rm -f libev.a
 	ln ev.a libev.a
 
 test: $(OBJ) test.c
