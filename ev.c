@@ -553,7 +553,7 @@ static int ev_arm_signal(struct ev_entry *ev_entry)
 		return -EINVAL;
 	}
 
-	fd = signalfd(-1, &ev_entry_data_epoll->signal_mask, 0);
+	fd = signalfd(-1, &ev_entry_data_epoll->signal_mask, SFD_CLOEXEC);
 	if (fd < 0) {
 		pr_debug("signalfd");
 		return -EINVAL;
